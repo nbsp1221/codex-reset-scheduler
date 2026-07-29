@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a narrowly scoped, fail-closed improvement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the authorization boundary and dry-run behavior.
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Safety invariants
+      options:
+        - label:
+            The proposal never selects an unreviewed or future reset credit.
+          required: true
+        - label: The proposal can be validated without consuming a real reset.
+          required: true

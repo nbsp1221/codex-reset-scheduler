@@ -1,0 +1,63 @@
+{
+  "name": "codex-resetrail",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.4",
+  "description": "Safe, deterministic scheduling for expiring Codex rate-limit resets.",
+  "type": "module",
+  "bin": {
+    "resetrail": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && node scripts/prepare-bin.mjs",
+    "build:test": "pnpm clean && tsc -p tsconfig.test.json",
+    "test": "pnpm build:test && node scripts/run-tests.mjs",
+    "coverage": "pnpm build:test && node scripts/run-tests.mjs --coverage",
+    "lint": "eslint src test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "pack:dry": "pnpm pack --dry-run",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm build && pnpm pack:dry",
+    "prepack": "pnpm build"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nbsp1221/resetrail.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nbsp1221/resetrail/issues"
+  },
+  "homepage": "https://github.com/nbsp1221/resetrail#readme",
+  "keywords": [
+    "codex",
+    "openai",
+    "rate-limit",
+    "scheduler",
+    "cli"
+  ],
+  "author": "nbsp1221",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.1",
+    "eslint": "10.8.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0"
+  }
+}

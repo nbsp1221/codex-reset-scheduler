@@ -1,0 +1,50 @@
+name: Bug report
+description:
+  Report a reproducible Resetrail defect without sharing credentials or raw
+  reset IDs.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value:
+        Do not attach Codex credentials, auth files, raw credit IDs, or
+        unsanitized logs.
+  - type: input
+    id: version
+    attributes:
+      label: Resetrail version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description:
+        Include commands and sanitized output. Say whether every mutating
+        command used --dry-run.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label:
+            I removed credentials, email addresses, home paths, and raw reset
+            IDs.
+          required: true
