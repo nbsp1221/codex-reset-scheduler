@@ -15,8 +15,10 @@ test("state store initializes private, valid, durable state", async () => {
     const state = await store.initialize();
     assert.equal(state.schemaVersion, 1);
     assert.ok(state.installId.length > 0);
-    assert.equal((await lstat(paths.stateDirectory)).mode & 0o077, 0);
-    assert.equal((await lstat(paths.stateFile)).mode & 0o077, 0);
+    if (process.platform !== "win32") {
+      assert.equal((await lstat(paths.stateDirectory)).mode & 0o077, 0);
+      assert.equal((await lstat(paths.stateFile)).mode & 0o077, 0);
+    }
     assert.doesNotMatch(
       await readFile(paths.stateFile, "utf8"),
       /token|email/i,

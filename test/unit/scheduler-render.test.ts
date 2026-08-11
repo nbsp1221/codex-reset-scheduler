@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import type { ResetPlan } from "../../src/domain/types.js";
@@ -118,4 +119,27 @@ test("Windows install creates its managed folder and remove cleans it only when 
     calls.at(-1)?.arguments.join(" ") ?? "",
     /DeleteFolder\('Resetrail',0\)/u,
   );
+});
+
+test("Windows install writes Task Scheduler XML as UTF-16LE with a BOM", async () => {
+  let registeredXml: Buffer | undefined;
+  const inspectingRun: CommandRunner = async (executable, arguments_) => {
+    if (executable === "schtasks.exe" && arguments_.includes("/Create")) {
+      const xmlIndex = arguments_.indexOf("/XML");
+      const path = arguments_[xmlIndex + 1];
+      assert.ok(path);
+      registeredXml = await readFile(path);
+      assert.deepEqual([...registeredXml.subarray(0, 2)], [0xff, 0xfe]);
+      const text = registeredXml.subarray(2).toString("utf16le");
+      assert.match(text, /^<\?xml version="1\.0" encoding="UTF-16"\?>/u);
+      assert.match(text, /<LogonType>InteractiveToken<\/LogonType>/u);
+      assert.doesNotMatch(text, /synthetic-credit-secret/u);
+    }
+    return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+  };
+  const scheduler = new WindowsScheduler(inspectingRun, "DOMAIN\\test");
+
+  await scheduler.install(plan("task-scheduler"), action);
+
+  assert.ok(registeredXml);
 });

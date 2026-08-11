@@ -13,8 +13,9 @@ It is not affiliated with, endorsed by, sponsored by, or supported by OpenAI.
 
 Resetrail is currently a release candidate under cross-platform validation. The
 Linux app-server and systemd paths have been validated, including one historical
-live redemption and a separate harmless marker-based scheduler test. macOS and
-Windows are implemented and contract-tested; their real-device marker validation
+live redemption and a separate harmless marker-based scheduler test. The Windows
+Task Scheduler path has also passed non-elevated real-device marker validation.
+macOS is implemented and contract-tested, but its real-device marker validation
 must be completed before the project declares all three platforms stable.
 
 No public package registry release has been made yet.

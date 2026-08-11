@@ -7,10 +7,27 @@ export async function atomicWriteText(
   content: string,
   mode: number,
 ): Promise<void> {
+  await atomicWrite(path, content, mode);
+}
+
+export async function atomicWriteBytes(
+  path: string,
+  content: Uint8Array,
+  mode: number,
+): Promise<void> {
+  await atomicWrite(path, content, mode);
+}
+
+async function atomicWrite(
+  path: string,
+  content: string | Uint8Array,
+  mode: number,
+): Promise<void> {
   const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
   const handle = await open(temporary, "wx", mode);
   try {
-    await handle.writeFile(content, "utf8");
+    if (typeof content === "string") await handle.writeFile(content, "utf8");
+    else await handle.writeFile(content);
     await handle.sync();
   } finally {
     await handle.close();

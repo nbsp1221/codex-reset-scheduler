@@ -11,7 +11,7 @@ import type {
   SchedulerPreview,
 } from "./types.js";
 import { windowsQuoteArgument, xmlEscape } from "./escaping.js";
-import { atomicWriteText } from "./write.js";
+import { atomicWriteBytes } from "./write.js";
 
 export class WindowsScheduler implements SchedulerAdapter {
   readonly #run: CommandRunner;
@@ -42,7 +42,14 @@ export class WindowsScheduler implements SchedulerAdapter {
     if (file === undefined) throw new Error("Task Scheduler preview is empty");
     await this.#ensureFolder();
     await mkdir(tmpdir(), { recursive: true });
-    await atomicWriteText(file.path, file.content, 0o600);
+    await atomicWriteBytes(
+      file.path,
+      Buffer.concat([
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from(file.content, "utf16le"),
+      ]),
+      0o600,
+    );
     try {
       await this.#run(
         preview.registration.executable,
@@ -131,7 +138,7 @@ function renderTask(
     )
     .join("\n");
   const arguments_ = action.arguments.map(windowsQuoteArgument).join(" ");
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>Resetrail exact reset ${xmlEscape(plan.creditSelector)}</Description>

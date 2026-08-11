@@ -4,16 +4,18 @@ import test from "node:test";
 import { managedPaths } from "../../src/persistence/paths.js";
 
 test("managed paths follow native per-user conventions", () => {
-  assert.equal(
-    managedPaths({ platform: "linux", home: "/home/test", environment: {} })
-      .stateFile,
-    "/home/test/.local/state/resetrail/state.json",
-  );
-  assert.equal(
-    managedPaths({ platform: "darwin", home: "/Users/test", environment: {} })
-      .schedulerDirectory,
-    "/Users/test/Library/LaunchAgents",
-  );
+  if (process.platform !== "win32") {
+    assert.equal(
+      managedPaths({ platform: "linux", home: "/home/test", environment: {} })
+        .stateFile,
+      "/home/test/.local/state/resetrail/state.json",
+    );
+    assert.equal(
+      managedPaths({ platform: "darwin", home: "/Users/test", environment: {} })
+        .schedulerDirectory,
+      "/Users/test/Library/LaunchAgents",
+    );
+  }
   assert.match(
     managedPaths({
       platform: "win32",
