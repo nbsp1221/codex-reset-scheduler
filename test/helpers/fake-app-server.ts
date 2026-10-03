@@ -2,14 +2,15 @@ import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const requestLog = process.env.RESETRAIL_FAKE_REQUEST_LOG;
+const epochSeconds = Number(process.env.RESETRAIL_FAKE_EPOCH_SECONDS ?? "0");
 const lines = createInterface({ input: process.stdin });
 
 function reply(id: number, result: unknown, method?: string): void {
   const send = () =>
     process.stdout.write(`${JSON.stringify({ id, result })}\n`);
-  if (method === process.env.RESETRAIL_FAKE_DELAY_METHOD) {
-    setTimeout(send, Number(process.env.RESETRAIL_FAKE_DELAY_MS ?? "0"));
-  } else send();
+  if (method !== undefined && method === process.env.RESETRAIL_FAKE_HOLD_METHOD)
+    return;
+  send();
 }
 
 lines.on("line", (line) => {
@@ -37,11 +38,17 @@ lines.on("line", (line) => {
     return reply(
       message.id,
       {
+        ordinaryUsageAllowed: false,
+        accountId: "synthetic-account",
+        rateLimitUpsell: null,
         rateLimits: {
+          limitId: "codex",
+          limitName: null,
+          rateLimitReachedType: null,
           primary: {
             usedPercent: 50,
             windowDurationMins: 300,
-            resetsAt: 20_000,
+            resetsAt: epochSeconds + 20_000,
           },
           secondary: null,
         },
@@ -53,8 +60,8 @@ lines.on("line", (line) => {
               id: "synthetic-credit-a",
               resetType: "codexRateLimits",
               status: "available",
-              grantedAt: 1_000,
-              expiresAt: 10_000,
+              grantedAt: epochSeconds + 1_000,
+              expiresAt: epochSeconds + 10_000,
               title: "Synthetic reset A",
               description: "Fixture only",
             },
@@ -62,8 +69,8 @@ lines.on("line", (line) => {
               id: "synthetic-credit-b",
               resetType: "codexRateLimits",
               status: "available",
-              grantedAt: 1_100,
-              expiresAt: 11_000,
+              grantedAt: epochSeconds + 1_100,
+              expiresAt: epochSeconds + 11_000,
               title: "Synthetic reset B",
               description: "Fixture only",
             },
@@ -74,6 +81,12 @@ lines.on("line", (line) => {
     );
   }
   if (message.method === "account/rateLimitResetCredit/consume") {
+    if (process.env.RESETRAIL_FAKE_REFUSE_CONSUME === "1") {
+      process.stdout.write(
+        `${JSON.stringify({ id: message.id, error: { code: -32601 } })}\n`,
+      );
+      return;
+    }
     return reply(
       message.id,
       {
