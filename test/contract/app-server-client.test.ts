@@ -61,25 +61,67 @@ test("consume gateway refuses an omitted exact credit identity", async () => {
   }
 });
 
-test("app-server requests honor the worker-wide absolute deadline", async () => {
+test("initialization and later requests share one absolute deadline", async (context) => {
+  context.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
   const fake = fileURLToPath(
     new URL("../helpers/fake-app-server.js", import.meta.url),
   );
-  const client = await AppServerClient.connect({
+  const connecting = AppServerClient.connect({
     executable: process.execPath,
     arguments: [fake],
     environment: {
       ...process.env,
-      RESETRAIL_FAKE_DELAY_METHOD: "account/read",
-      RESETRAIL_FAKE_DELAY_MS: "500",
+      RESETRAIL_FAKE_HOLD_METHOD: "account/read",
     },
     deadlineAtEpochMilliseconds: Date.now() + 150,
   });
+  // Charge initialization to the same budget without depending on child startup speed.
+  context.mock.timers.tick(100);
+  const client = await connecting;
   try {
-    await assert.rejects(() => client.readAccount(), /request timed out/u);
+    let settled = false;
+    const request = client.readAccount().finally(() => {
+      settled = true;
+    });
+    const rejection = assert.rejects(
+      request,
+      /request timed out: account\/read/u,
+    );
+    context.mock.timers.tick(49);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    context.mock.timers.tick(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, true);
+    await rejection;
+    await assert.rejects(
+      () => client.readRateLimits(),
+      /worker deadline was reached/u,
+    );
   } finally {
     await client.close();
   }
+});
+
+test("the absolute deadline also bounds initialization", async (context) => {
+  context.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
+  const fake = fileURLToPath(
+    new URL("../helpers/fake-app-server.js", import.meta.url),
+  );
+  const rejection = assert.rejects(
+    AppServerClient.connect({
+      executable: process.execPath,
+      arguments: [fake],
+      environment: {
+        ...process.env,
+        RESETRAIL_FAKE_HOLD_METHOD: "initialize",
+      },
+      deadlineAtEpochMilliseconds: Date.now() + 150,
+    }),
+    /request timed out: initialize/u,
+  );
+  context.mock.timers.tick(150);
+  await rejection;
 });
 
 async function connectFake(

@@ -1,66 +1,37 @@
 # Resetrail for Codex
 
-Safe, deterministic scheduling for expiring Codex rate-limit resets.
+Schedule a currently visible banked Codex reset before it expires.
 
-Resetrail is an independent open-source tool designed to work with OpenAI Codex.
-It is not affiliated with, endorsed by, sponsored by, or supported by OpenAI.
+Resetrail is a small local open-source CLI. You inspect a reset, review its
+schedule, confirm one exact credit, and check or cancel the plan. The operating
+system invokes the worker inside the final window; there is no resident
+Resetrail daemon. The device must be powered on, online, and have the required
+user session available. Delivery before expiry is not guaranteed.
 
-> [!WARNING] Redeeming a banked rate-limit reset is permanent. Resetrail never
-> chooses a fallback credit: every schedule is bound to one exact
-> backend-provided credit ID.
+Resetrail is independent and is not affiliated with, endorsed by, sponsored by,
+or supported by OpenAI.
 
-## Project status
+> [!WARNING] Redeeming a banked reset is permanent. A full reset also changes
+> the weekly reset date. Review that tradeoff before confirming a schedule.
+> Resetrail always uses the selected credit ID and never chooses a fallback
+> credit.
 
-Resetrail is currently a release candidate under cross-platform validation. The
-Linux app-server and systemd paths have been validated, including one historical
-live redemption and a separate harmless marker-based scheduler test. The Windows
-Task Scheduler path has also passed non-elevated real-device marker validation.
-macOS is implemented and contract-tested, but its real-device marker validation
-must be completed before the project declares all three platforms stable.
+## Release status
 
-No public package registry release has been made yet.
+This is a release candidate; no public package registry release has been made.
+Codex `0.159.2` schema inspection and synthetic CLI validation are recorded in
+[the current validation report](docs/validation/2026-10-03-release-preparation.md).
+They do not establish authenticated current-account compatibility. Linux and
+Windows native marker QA are historical observations; macOS real-device marker
+QA is still pending. See [platform support](docs/platform-support.md).
 
-## Why Resetrail
+## Install from source
 
-Codex may provide banked rate-limit resets that expire. Resetrail lets you
-inspect them, preview an exact schedule, and explicitly arm one or more
-currently visible resets so the operating system attempts redemption shortly
-before expiry.
-
-These banked resets are not purchased usage credits. Resetrail does not buy
-usage, configure auto-reload, or change paid-credit settings. Arming changes
-private local state and the native scheduler, but it does not immediately redeem
-anything; the irreversible action can happen later only inside the reviewed
-plan's bounded window.
-
-Safety properties:
-
-- one immutable plan per exact credit ID
-- no backend-selected fallback credit
-- no standing authorization for future credits in v1
-- idempotency identity persisted before a consume request
-- ambiguous retries reuse the same UUID
-- a confirmed `nothingToReset` starts a new logical attempt with a fresh UUID
-- account, time, runtime hash, reset type, status, ID, and expiry gates
-- read-after-consume reconciliation
-- private state and a content-addressed worker snapshot
-- sanitized logs with no raw credit IDs, email addresses, or credentials
-- dry-run commands that do not create files or scheduler entries
-
-Resetrail uses the documented Codex app-server methods rather than reading Codex
-credentials or calling private backend routes.
-
-## Requirements
-
-- Node.js 22.14 or newer; Node.js 24 LTS is recommended
-- a current authenticated Codex CLI with `codex app-server`
-- a ChatGPT Codex account whose app-server response includes detailed reset rows
-- one of:
-  - Linux with a working systemd user manager
-  - macOS with a logged-in LaunchAgent session
-  - Windows with a logged-in Task Scheduler session
-
-## Install during development
+Requirements: Node.js 22.14 or newer, pnpm 10.33.4, an authenticated Codex CLI
+with `codex app-server`, and detailed reset rows for your ChatGPT Codex account.
+The native scheduler also needs a working systemd user manager on Linux, a
+logged-in LaunchAgent session on macOS, or a logged-in Task Scheduler session on
+Windows.
 
 ```sh
 git clone https://github.com/nbsp1221/resetrail.git
@@ -71,122 +42,156 @@ pnpm build
 node dist/cli.js doctor
 ```
 
-After a public package registry release, the intended entrypoints are:
+The source checkout uses `node dist/cli.js` in the examples below. The package
+name is **codex-resetrail** and its installed command is **resetrail**.
+[Installation details](docs/installation.md) include a local tarball option
+whose consumer needs Node.js and npm, without pnpm.
+
+To try the full flow with fake data and no Codex account, see the
+[synthetic CLI demo](docs/synthetic-demo.md).
+
+## Inspect and preview
 
 ```sh
-pnpm dlx codex-resetrail doctor
-pnpm add --global codex-resetrail
-resetrail doctor
+node dist/cli.js resets
+node dist/cli.js plan --credit <selector> --before 10m
+node dist/cli.js arm --credit <selector> --before 10m --dry-run
 ```
 
-An armed scheduler never points at a `pnpm dlx` cache. Resetrail copies its
-built worker into a private, content-addressed runtime directory and records the
-absolute Node and Codex executable paths.
-
-## Safe first run
-
-```sh
-resetrail doctor
-resetrail resets
-resetrail plan --before 10m
-resetrail arm --dry-run --before 10m
-```
-
+Copy the public selector from `resets`. Review the expiry and trigger times.
 These commands do not redeem a reset. `plan` calculates times; `arm --dry-run`
-also renders the native scheduler artifacts without writing them.
+renders scheduler artifacts without writing state or registering a task.
 
-To arm the earliest-expiring detailed reset:
+If `doctor` reports a required check failure, resolve it before arming.
+Count-only reset information cannot identify a credit to schedule. A capped
+detail list permits selection only from the rows actually visible.
 
-```sh
-resetrail arm --before 10m
-```
-
-The interactive flow shows a fresh preview and binds its exact confirmation to
-the public selector (`ARM <selector>`) for one reset, or to the reviewed count
-for `--all`. For a reviewed non-interactive run:
+## Confirm and check the schedule
 
 ```sh
-resetrail arm --before 10m --yes
+node dist/cli.js arm --credit <selector> --before 10m
+node dist/cli.js status
 ```
 
-To create independent plans for all currently visible eligible resets:
+The interactive command shows a fresh preview and asks for `ARM <selector>`.
+Confirmation creates a local plan and native schedule; it does not redeem the
+reset immediately. Save the plan ID from the output and verify that `status`
+shows `armed` with an installed, enabled scheduler.
+
+Every plan binds one current exact credit, account, expiry, and worker snapshot.
+New promotional grants are not guaranteed and require separate explicit
+authorization if they become visible later.
+
+## Cancel or check the result
+
+To cancel a reviewed plan:
 
 ```sh
-resetrail arm --all --before 10m
+node dist/cli.js disarm --plan <plan-id> --dry-run
+node dist/cli.js disarm --plan <plan-id>
+node dist/cli.js status --plan <plan-id>
 ```
 
-`--all` does not authorize resets issued later.
+Type `DISARM` when prompted, then verify `disarmed` in `status`. Cancellation
+does not undo a redemption. An ambiguous in-flight attempt cannot be disarmed.
+
+To check a scheduled run:
+
+```sh
+node dist/cli.js status --plan <plan-id>
+node dist/cli.js logs --plan <plan-id>
+```
+
+| Status                    | Meaning                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `armed`                   | Waiting for an eligible worker invocation; no confirmed redemption |
+| `attempting`              | A persisted attempt exists; its result may be ambiguous            |
+| `settling`                | Waiting for an authoritative snapshot to retire the exact target   |
+| `succeeded`               | A complete fresh snapshot confirmed retirement of the exact target |
+| `expired` / `unavailable` | The deadline passed or the target is no longer eligible            |
+| `paused`                  | A safety gate requires attention; inspect `terminalReason`         |
+| `disarmed`                | The plan was cancelled                                             |
+
+Logs record arming and worker events. Confirm cancellation with `status`; it
+does not currently add a separate disarm audit event. Incomplete credit details
+are never treated as proof of success.
+
+## Safety and privacy
+
+Banked resets are distinct from purchased usage credits. Resetrail does not buy
+usage, configure auto-reload, or change paid-credit settings.
+
+- Exact credit/account/runtime binding; no backend-selected fallback
+- UUID persisted before consume and reused after ambiguous failures
+- Only confirmed `nothingToReset` starts a fresh logical attempt
+- No standing authorization for future credits
+- Read-after-consume reconciliation using complete credit details
+- Private state and a content-addressed worker snapshot
+- Sanitized logs without raw credit IDs, email addresses, or credentials
+- Dry-run commands that create no state or scheduler entries
+
+Resetrail starts the local `codex app-server`. It does not read `auth.json`,
+Keychain, Credential Manager, tokens, or cookies, and has no telemetry. An armed
+scheduler uses the private worker snapshot and recorded absolute Node and Codex
+paths, independently of package-manager caches.
 
 ## Commands
+
+The installed `resetrail` command accepts:
 
 ```text
 resetrail doctor [--json]
 resetrail resets [--timezone <IANA>] [--json]
 resetrail plan [--credit <selector> | --all] [--before 10m] [--json]
-resetrail arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run]
+resetrail arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
 resetrail status [--plan <id-or-selector>] [--json]
-resetrail disarm [--plan <id> | --all] [--yes] [--dry-run]
+resetrail disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
 resetrail logs [--plan <id-or-selector>] [--json]
 resetrail gc [--dry-run] [--json]
 resetrail version [--json]
 ```
 
-Human output uses a short SHA-256 selector. Raw credit IDs exist only in the
-private state needed to send an exact consume request.
+For a reviewed non-interactive run, use `--yes` after reviewing
+`arm --dry-run --json`. Interactive arming is rejected with `--json` to keep
+machine output a single JSON document. `--all` selects only currently visible
+eligible rows and does not authorize future grants.
 
-`doctor` checks Codex read access and the native scheduler without changing
-either. `gc --dry-run` lists terminal scheduler artifacts and unreferenced,
-strictly named runtime snapshots; plain `gc` removes only those managed paths.
-For machine-readable arming, review `arm --dry-run --json` first and then pass
-`--yes`; interactive confirmation is intentionally rejected with `--json` so the
-command always emits one valid JSON document.
+Human output uses a short SHA-256 selector. Raw credit IDs exist only in private
+state needed for exact consume requests. `doctor` checks read access and
+scheduler availability. `gc --dry-run` previews cleanup; `gc` removes only
+managed terminal scheduler artifacts and unreferenced runtime snapshots.
 
 ## Platform behavior
 
-| Platform | Native scheduler             | Required session behavior                                                        |
-| -------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| Linux    | systemd user service/timer   | user manager must remain available; linger is recommended for logged-out servers |
-| macOS    | per-user launchd LaunchAgent | user must be logged in; powered-off deadlines cannot be recovered after expiry   |
-| Windows  | per-user Task Scheduler task | user must be logged in; Resetrail does not store a password or run as SYSTEM     |
+| Platform | Native scheduler             | Required session behavior                                                      |
+| -------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| Linux    | systemd user service/timer   | User manager must remain available; linger is an explicit user choice          |
+| macOS    | per-user launchd LaunchAgent | User must be logged in; powered-off deadlines cannot be recovered after expiry |
+| Windows  | per-user Task Scheduler task | User must be logged in; no stored password or SYSTEM task                      |
 
-All platforms schedule several independent invocations inside the final window.
-The worker's UTC `notBefore` and expiry values are authoritative, so early,
-late, duplicate, annual, or catch-up invocations safely no-op when ineligible.
+The scheduler invokes several finite workers inside the final window. Early,
+late, duplicate, or catch-up invocations no-op when ineligible. The worker's UTC
+`notBefore` and expiry are authoritative. No resident daemon does not mean there
+are no repeated invocations or account reads.
 
-See [platform support](docs/platform-support.md) and the
-[safety model](docs/safety-model.md) for details.
-
-## Privacy
-
-Resetrail starts the local `codex app-server` process. It does not read
-`auth.json`, Keychain, Credential Manager, tokens, or cookies. The scheduler
-definition contains only an opaque plan ID and private worker path. There is no
-telemetry.
+See [platform support](docs/platform-support.md),
+[the safety model](docs/safety-model.md), and
+[protocol compatibility](docs/protocol-compatibility.md).
 
 ## Development
 
 ```sh
-pnpm test
-pnpm coverage
-pnpm lint
-pnpm format:check
-pnpm security:secrets
 pnpm check
 ```
 
-Tests use a synthetic app-server. Tests and CI must never point the consume path
-at a real Codex installation or account.
-
-## Compatibility
-
-The Codex app-server is experimental and may change. Resetrail validates the
-response shape at runtime and fails closed on unknown required fields or outcome
-values. See [protocol compatibility](docs/protocol-compatibility.md).
+Tests use synthetic app-server data and isolated state. Tests and CI must never
+point the consume path at a real Codex installation or account. The
+[release preparation record](docs/validation/2026-10-03-release-preparation.md)
+distinguishes direct checks, historical evidence, and checks not performed.
 
 ## Acknowledgements
 
-The design research reviewed these independent community projects without
-copying their code:
+The design research reviewed these independent projects without copying code:
 
 - [codex-auto-reset](https://github.com/RobertTLange/codex-auto-reset)
 - [CodexResets](https://github.com/maximpri/CodexResets)
@@ -195,7 +200,7 @@ copying their code:
 - [codex-reset](https://github.com/hcsolakoglu/codex-reset)
 
 The protocol source of truth is the
-[Codex app-server documentation](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md#8-earned-rate-limit-resets-chatgpt).
+[official Codex app-server documentation](https://developers.openai.com/codex/app-server).
 
 ## License
 

@@ -1,28 +1,61 @@
 # Codex protocol compatibility
 
-Resetrail uses these documented app-server methods:
+Resetrail uses the documented app-server methods `account/read`,
+`account/rateLimits/read`, and `account/rateLimitResetCredit/consume`.
 
-- `account/read`
-- `account/rateLimits/read`
-- `account/rateLimitResetCredit/consume`
+Upstream accepts an optional `creditId` and requires a non-empty
+`idempotencyKey`. Resetrail requires a non-empty exact credit ID, persists a
+UUID before sending, and reuses it after an ambiguous result. The documented
+outcomes remain `reset`, `alreadyRedeemed`, `nothingToReset`, and `noCredit`. It
+reads limits again after consuming rather than inferring updated windows. See
+the
+[official app-server documentation](https://developers.openai.com/codex/app-server).
 
-The current contract requires a non-empty `idempotencyKey`; `creditId` is
-optional upstream. Resetrail deliberately narrows that contract and requires a
-non-empty exact `creditId` for every consume request.
+## Current evidence: 2026-10-03
 
-Resetrail initializes with the experimental API capability and validates
-account, rate-window, reset-credit, and outcome shapes. The multi-bucket `codex`
-limit is preferred, with the documented backward-compatible single-bucket value
-as a fallback.
+Windows Codex CLI `0.159.2` was inspected without an authenticated account:
+`--version`, `app-server --stdio --help`, and
+`app-server generate-ts --experimental --out <temporary-directory>`. The schemas
+were generated with an empty isolated Codex home. No account request, login,
+real consume, or credential-file read was performed.
 
-The app-server is experimental. A new required shape or unknown outcome fails
-closed. Codex version drift is recorded for diagnostics but compatibility is
-decided by initialization and strict runtime decoding, not by a hard-coded
-version allowlist.
+The generated types retain the reset-credit fields and four consume outcomes
+used by Resetrail. They also include optional usage metadata such as
+`ordinaryUsageAllowed`, `accountId`, and `rateLimitUpsell`. Resetrail does not
+interpret those fields as proof of reset completion.
 
-The local Linux release-candidate validation used Codex CLI `0.145.0` with
-Node.js `24.18.0`. That observation is evidence for this build, not a promise
-that future experimental protocol versions are compatible.
+The synthetic app-server fixture includes those additional fields and passes the
+existing decoder/client boundary. Capped and count-only detail snapshots remain
+incomplete. Worker regression tests cover unavailable details, capped rows, and
+an empty incomplete list: absence of the target neither authorizes consume nor
+confirms success. Complete fresh retirement is still required.
 
-Source:
-[openai/codex app-server documentation](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md#8-earned-rate-limit-resets-chatgpt)
+These are schema and synthetic observations. Current authenticated service
+responses and account eligibility have not been validated. Generated TypeScript
+types alone do not prove runtime JSON compatibility; numeric counts must still
+be safe integers under Resetrail's decoder.
+
+## Runtime policy
+
+Initialization enables the experimental API capability. The multi-bucket `codex`
+limit is preferred, with the backward-compatible single-bucket value as a
+fallback. Unknown outcome values or required enum shapes fail closed; additional
+unused metadata is ignored.
+
+Compatibility is decided by initialization and runtime decoding rather than a
+version allowlist. Version drift is recorded for diagnostics. A schema
+inspection is not a guarantee about future experimental releases.
+
+All app-server requests in a worker share one absolute deadline, including
+process startup and initialization. Contract tests advance a mock clock and hold
+a synthetic reply to verify the remaining budget and initialization timeout
+independently of machine startup speed. The production deadline calculation is
+unchanged.
+
+## Historical evidence
+
+Linux records describe Codex `0.145.0` with Node.js `24.18.0`, followed by
+read-only `0.146.0` validation. Those historical observations are separate from
+the current schema inspection. See
+[the Linux validation record](validation/linux-live-redemption.md) and
+[the current release preparation record](validation/2026-10-03-release-preparation.md).
