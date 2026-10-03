@@ -1,11 +1,11 @@
 {
-  "name": "codex-resetrail",
+  "name": "codex-resetpilot",
   "version": "0.1.0",
   "packageManager": "pnpm@10.33.4",
   "description": "Safe, deterministic scheduling for expiring Codex rate-limit resets.",
   "type": "module",
   "bin": {
-    "resetrail": "dist/cli.js"
+    "resetpilot": "dist/cli.js"
   },
   "files": [
     "dist",

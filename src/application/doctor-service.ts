@@ -74,7 +74,7 @@ function checksFor(platform: NodeJS.Platform): readonly CheckSpecification[] {
         arguments: ["print", `gui/${process.getuid?.() ?? 0}`],
         required: true,
         accept: anyOutput,
-        hint: "Run Resetrail from an active logged-in GUI user session.",
+        hint: "Run Codex ResetPilot from an active logged-in GUI user session.",
       },
       {
         name: "plist-validator",

@@ -428,7 +428,7 @@ function output(
 }
 
 function renderHuman(command: string, data: unknown): string {
-  if (command === "version") return `resetrail ${VERSION}`;
+  if (command === "version") return `resetpilot ${VERSION}`;
   if (command === "doctor") {
     const value = data as Record<string, unknown> & {
       scheduler: DoctorSchedulerReport;
@@ -440,7 +440,7 @@ function renderHuman(command: string, data: unknown): string {
           `- ${check.name}${check.required ? " (required)" : " (advisory)"}: ${check.hint ?? "unavailable"}`,
       );
     return [
-      `Resetrail doctor: ${value.ok === true ? "OK" : "ATTENTION"}`,
+      `Codex ResetPilot doctor: ${value.ok === true ? "OK" : "ATTENTION"}`,
       `Node: ${String(value.node)}`,
       `Platform: ${String(value.platform)} (${String(value.architecture)})`,
       `Codex: ${String(value.codexVersion)}`,
@@ -515,25 +515,25 @@ function reportError(
       `${JSON.stringify({ schemaVersion: 1, ok: false, error: { code: resetrail.code, message: resetrail.message } }, null, 2)}\n`,
     );
   } else {
-    dependencies.stderr(`resetrail: ${resetrail.message}\n`);
+    dependencies.stderr(`resetpilot: ${resetrail.message}\n`);
   }
   return resetrail.exitCode;
 }
 
 function helpText(): string {
-  return `Resetrail ${VERSION}
+  return `Codex ResetPilot ${VERSION}
 Safe, deterministic scheduling for expiring Codex rate-limit resets.
 
 Usage:
-  resetrail doctor [--json]
-  resetrail resets [--timezone <IANA>] [--json]
-  resetrail plan [--credit <selector> | --all] [--before 10m] [--json]
-  resetrail arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
-  resetrail status [--plan <id-or-selector>] [--json]
-  resetrail disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
-  resetrail logs [--plan <id-or-selector>] [--json]
-  resetrail gc [--dry-run] [--json]
-  resetrail version [--json]
+  resetpilot doctor [--json]
+  resetpilot resets [--timezone <IANA>] [--json]
+  resetpilot plan [--credit <selector> | --all] [--before 10m] [--json]
+  resetpilot arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
+  resetpilot status [--plan <id-or-selector>] [--json]
+  resetpilot disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
+  resetpilot logs [--plan <id-or-selector>] [--json]
+  resetpilot gc [--dry-run] [--json]
+  resetpilot version [--json]
 
 No command consumes a reset without an explicitly armed exact credit plan.
 `;

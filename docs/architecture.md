@@ -1,6 +1,6 @@
 # Architecture
 
-Resetrail separates irreversible policy from operating-system delivery.
+Codex ResetPilot separates irreversible policy from operating-system delivery.
 
 ```text
 CLI read/preview

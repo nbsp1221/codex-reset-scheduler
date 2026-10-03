@@ -1,20 +1,25 @@
-# Resetrail for Codex
+# Codex ResetPilot
 
 Schedule a currently visible banked Codex reset before it expires.
 
-Resetrail is a small local open-source CLI. You inspect a reset, review its
-schedule, confirm one exact credit, and check or cancel the plan. The operating
-system invokes the worker inside the final window; there is no resident
-Resetrail daemon. The device must be powered on, online, and have the required
-user session available. Delivery before expiry is not guaranteed.
+Codex ResetPilot is a small local open-source CLI. You inspect a reset, review
+its schedule, confirm one exact credit, and check or cancel the plan. The
+operating system invokes the worker inside the final window; there is no
+resident Codex ResetPilot daemon. The device must be powered on, online, and
+have the required user session available. Delivery before expiry is not
+guaranteed.
 
-Resetrail is independent and is not affiliated with, endorsed by, sponsored by,
-or supported by OpenAI.
+Codex ResetPilot is independent and is not affiliated with, endorsed by,
+sponsored by, or supported by OpenAI.
 
 > [!WARNING] Redeeming a banked reset is permanent. A full reset also changes
 > the weekly reset date. Review that tradeoff before confirming a schedule.
-> Resetrail always uses the selected credit ID and never chooses a fallback
-> credit.
+> Codex ResetPilot always uses the selected credit ID and never chooses a
+> fallback credit.
+
+The project was previously named Resetrail. The new command shares its original
+state and scheduler namespaces; existing plans are not migrated or rescheduled.
+See [name-change compatibility](docs/name-change.md).
 
 ## Release status
 
@@ -43,7 +48,7 @@ node dist/cli.js doctor
 ```
 
 The source checkout uses `node dist/cli.js` in the examples below. The package
-name is **codex-resetrail** and its installed command is **resetrail**.
+name is **codex-resetpilot** and its installed command is **resetpilot**.
 [Installation details](docs/installation.md) include a local tarball option
 whose consumer needs Node.js and npm, without pnpm.
 
@@ -118,8 +123,8 @@ are never treated as proof of success.
 
 ## Safety and privacy
 
-Banked resets are distinct from purchased usage credits. Resetrail does not buy
-usage, configure auto-reload, or change paid-credit settings.
+Banked resets are distinct from purchased usage credits. Codex ResetPilot does
+not buy usage, configure auto-reload, or change paid-credit settings.
 
 - Exact credit/account/runtime binding; no backend-selected fallback
 - UUID persisted before consume and reused after ambiguous failures
@@ -130,25 +135,25 @@ usage, configure auto-reload, or change paid-credit settings.
 - Sanitized logs without raw credit IDs, email addresses, or credentials
 - Dry-run commands that create no state or scheduler entries
 
-Resetrail starts the local `codex app-server`. It does not read `auth.json`,
-Keychain, Credential Manager, tokens, or cookies, and has no telemetry. An armed
-scheduler uses the private worker snapshot and recorded absolute Node and Codex
-paths, independently of package-manager caches.
+Codex ResetPilot starts the local `codex app-server`. It does not read
+`auth.json`, Keychain, Credential Manager, tokens, or cookies, and has no
+telemetry. An armed scheduler uses the private worker snapshot and recorded
+absolute Node and Codex paths, independently of package-manager caches.
 
 ## Commands
 
-The installed `resetrail` command accepts:
+The installed `resetpilot` command accepts:
 
 ```text
-resetrail doctor [--json]
-resetrail resets [--timezone <IANA>] [--json]
-resetrail plan [--credit <selector> | --all] [--before 10m] [--json]
-resetrail arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
-resetrail status [--plan <id-or-selector>] [--json]
-resetrail disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
-resetrail logs [--plan <id-or-selector>] [--json]
-resetrail gc [--dry-run] [--json]
-resetrail version [--json]
+resetpilot doctor [--json]
+resetpilot resets [--timezone <IANA>] [--json]
+resetpilot plan [--credit <selector> | --all] [--before 10m] [--json]
+resetpilot arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
+resetpilot status [--plan <id-or-selector>] [--json]
+resetpilot disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
+resetpilot logs [--plan <id-or-selector>] [--json]
+resetpilot gc [--dry-run] [--json]
+resetpilot version [--json]
 ```
 
 For a reviewed non-interactive run, use `--yes` after reviewing

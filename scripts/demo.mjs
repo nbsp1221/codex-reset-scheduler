@@ -68,7 +68,7 @@ function run(arguments_) {
   assert.equal(completed.status, 0, completed.stderr);
   const response = JSON.parse(completed.stdout);
   assert.equal(response.ok, true);
-  console.log("$ resetrail " + arguments_.join(" ") + " --json");
+  console.log("$ resetpilot " + arguments_.join(" ") + " --json");
   return response.data;
 }
 

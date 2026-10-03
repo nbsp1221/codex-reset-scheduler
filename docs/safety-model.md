@@ -34,8 +34,9 @@ account, runtime, target, or protocol mismatch.
 ## Detail truncation
 
 The backend may report an `availableCount` larger than the returned detail list.
-Resetrail never arms a count-only credit. If an already armed target is absent
-from an incomplete snapshot, the worker waits rather than inferring retirement.
+Codex ResetPilot never arms a count-only credit. If an already armed target is
+absent from an incomplete snapshot, the worker waits rather than inferring
+retirement.
 
 ## Time
 

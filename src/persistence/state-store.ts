@@ -71,7 +71,7 @@ export class StateStore {
       if (loaded === null) {
         if (!allowMissing)
           throw new SafetyError(
-            "Resetrail is not initialized.",
+            "Codex ResetPilot is not initialized.",
             "not_initialized",
           );
         current = {
@@ -150,7 +150,7 @@ async function acquireLock(path: string): Promise<void> {
     }
   }
   throw new SafetyError(
-    "Another Resetrail process holds the state lock.",
+    "Another Codex ResetPilot process holds the state lock.",
     "state_locked",
   );
 }
