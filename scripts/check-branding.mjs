@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -147,8 +147,13 @@ export function checkBranding(files) {
   return findings;
 }
 
-if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  const root = fileURLToPath(new URL("../", import.meta.url));
+const modulePath = await realpath(fileURLToPath(import.meta.url));
+const entryPath = process.argv[1]
+  ? await realpath(process.argv[1]).catch(() => undefined)
+  : undefined;
+
+if (entryPath === modulePath) {
+  const root = resolve(modulePath, "..", "..");
   const findings = checkBranding(await readBrandingFiles(root));
   if (findings.length > 0) {
     console.error(findings.join("\n"));

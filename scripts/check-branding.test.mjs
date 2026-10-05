@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkBranding, readBrandingFiles } from "./check-branding.mjs";
 
 const files = await readBrandingFiles(
@@ -194,18 +194,35 @@ test("the CLI exits nonzero for isolated bad URL, checkout and brand fixtures", 
     });
     assert.equal(initialized.error, undefined);
     assert.equal(initialized.status, 0);
-    const run = () =>
-      spawnSync(
-        process.execPath,
-        [join(directory, "scripts/check-branding.mjs")],
-        {
-          cwd: directory,
-          encoding: "utf8",
-          windowsHide: true,
-          timeout: 20_000,
-        },
-      );
+    const run = (entry = join(directory, "scripts/check-branding.mjs")) =>
+      spawnSync(process.execPath, [entry], {
+        cwd: directory,
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 20_000,
+      });
     assert.equal(run().status, 0);
+    const imported = spawnSync(process.execPath, ["--input-type=module", "-"], {
+      cwd: directory,
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 20_000,
+      input:
+        "await import(" +
+        JSON.stringify(
+          pathToFileURL(join(directory, "scripts/check-branding.mjs")).href,
+        ) +
+        "); console.log('import-only');",
+    });
+    assert.equal(imported.error, undefined);
+    assert.equal(imported.status, 0);
+    assert.equal(imported.stdout, "import-only\n");
+    let alias;
+    if (process.platform !== "win32") {
+      alias = join(directory, "checker-alias.mjs");
+      await symlink(join(directory, "scripts/check-branding.mjs"), alias);
+      assert.equal(run(alias).status, 0);
+    }
     for (const [path, original, replacement, category] of [
       [
         ".github/ISSUE_TEMPLATE/config.yml",
@@ -236,6 +253,15 @@ test("the CLI exits nonzero for isolated bad URL, checkout and brand fixtures", 
       assert.equal(result.error, undefined);
       assert.equal(result.status, 1);
       assert.ok(result.stderr.includes(category), result.stderr);
+      if (alias) {
+        const aliasedResult = run(alias);
+        assert.equal(aliasedResult.error, undefined);
+        assert.equal(aliasedResult.status, 1);
+        assert.ok(
+          aliasedResult.stderr.includes(category),
+          aliasedResult.stderr,
+        );
+      }
       await writeFile(join(directory, path), text);
     }
     assert.equal(run().status, 0);
