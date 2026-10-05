@@ -102,13 +102,19 @@ test("help documents every confirmation and machine-output option", async () => 
   const { dependencies, stdout } = harness();
   assert.equal(await runCli(["--help"], dependencies), 0);
   const output = stdout.join("");
-  assert.match(output, /^Codex ResetPilot /u);
-  assert.match(output, /resetpilot arm .* \[--yes\] \[--dry-run\] \[--json\]/u);
+  assert.match(output, /^codex-reset-scheduler /u);
   assert.match(
     output,
-    /resetpilot disarm .* \[--yes\] \[--dry-run\] \[--json\]/u,
+    /codex-reset-scheduler arm .* \[--yes\] \[--dry-run\] \[--json\]/u,
   );
-  assert.match(output, /resetpilot logs \[--plan <id-or-selector>\]/u);
+  assert.match(
+    output,
+    /codex-reset-scheduler disarm .* \[--yes\] \[--dry-run\] \[--json\]/u,
+  );
+  assert.match(
+    output,
+    /codex-reset-scheduler logs \[--plan <id-or-selector>\]/u,
+  );
 });
 
 test("doctor returns a failing health status when a required scheduler check fails", async () => {
@@ -155,7 +161,7 @@ test("version and human errors use the new CLI name without account access", asy
     },
   };
   assert.equal(await runCli(["version"], isolated), 0);
-  assert.equal(stdout.join(""), `resetpilot ${VERSION}\n`);
+  assert.equal(stdout.join(""), `codex-reset-scheduler ${VERSION}\n`);
   assert.equal(await runCli(["unknown-command"], isolated), 1);
-  assert.match(stderr.join(""), /^resetpilot: /u);
+  assert.match(stderr.join(""), /^codex-reset-scheduler: /u);
 });

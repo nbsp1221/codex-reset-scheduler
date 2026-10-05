@@ -124,7 +124,7 @@ function renderService(plan: ResetPlan, action: ExecSpec): string {
     .map(systemdQuote)
     .join(" ");
   return `[Unit]
-Description=Codex ResetPilot exact reset ${plan.creditSelector}
+Description=codex-reset-scheduler exact reset ${plan.creditSelector}
 Wants=network-online.target
 After=network-online.target
 
@@ -147,7 +147,7 @@ function renderTimer(plan: ResetPlan): string {
     .map((value) => `OnCalendar=${formatSystemdCalendar(value)}`)
     .join("\n");
   return `[Unit]
-Description=Schedule Codex ResetPilot exact reset ${plan.creditSelector}
+Description=Schedule codex-reset-scheduler exact reset ${plan.creditSelector}
 
 [Timer]
 Unit=${artifactName(plan.planId)}.service

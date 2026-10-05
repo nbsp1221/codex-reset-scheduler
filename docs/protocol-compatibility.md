@@ -1,10 +1,10 @@
 # Codex protocol compatibility
 
-Codex ResetPilot uses the documented app-server methods `account/read`,
+codex-reset-scheduler uses the documented app-server methods `account/read`,
 `account/rateLimits/read`, and `account/rateLimitResetCredit/consume`.
 
 Upstream accepts an optional `creditId` and requires a non-empty
-`idempotencyKey`. Codex ResetPilot requires a non-empty exact credit ID,
+`idempotencyKey`. codex-reset-scheduler requires a non-empty exact credit ID,
 persists a UUID before sending, and reuses it after an ambiguous result. The
 documented outcomes remain `reset`, `alreadyRedeemed`, `nothingToReset`, and
 `noCredit`. It reads limits again after consuming rather than inferring updated
@@ -20,9 +20,10 @@ were generated with an empty isolated Codex home. No account request, login,
 real consume, or credential-file read was performed.
 
 The generated types retain the reset-credit fields and four consume outcomes
-used by Codex ResetPilot. They also include optional usage metadata such as
-`ordinaryUsageAllowed`, `accountId`, and `rateLimitUpsell`. Codex ResetPilot
-does not interpret those fields as proof of reset completion.
+used by codex-reset-scheduler. They also include optional usage metadata such as
+`ordinaryUsageAllowed`, `accountId`, and `rateLimitUpsell`.
+codex-reset-scheduler does not interpret those fields as proof of reset
+completion.
 
 The synthetic app-server fixture includes those additional fields and passes the
 existing decoder/client boundary. Capped and count-only detail snapshots remain
@@ -33,7 +34,7 @@ confirms success. Complete fresh retirement is still required.
 These are schema and synthetic observations. Current authenticated service
 responses and account eligibility have not been validated. Generated TypeScript
 types alone do not prove runtime JSON compatibility; numeric counts must still
-be safe integers under Codex ResetPilot's decoder.
+be safe integers under codex-reset-scheduler's decoder.
 
 ## Runtime policy
 

@@ -1,7 +1,7 @@
 # Security policy
 
-Codex ResetPilot performs an irreversible account-level action. Changes to the
-consume gateway, authorization state, scheduler definitions, path handling,
+codex-reset-scheduler performs an irreversible account-level action. Changes to
+the consume gateway, authorization state, scheduler definitions, path handling,
 logs, and app-server protocol are security-sensitive.
 
 ## Supported versions
@@ -29,11 +29,11 @@ responses, email addresses, or real reset credit IDs in a report.
 
 ## Threat boundaries
 
-Codex ResetPilot assumes the current operating-system user and the installed
-Codex CLI are trusted. It does not protect against an attacker who can replace
-the user's Node or Codex executable, control the account backend, or write
-arbitrary files as the current user. Runtime hashing detects changes to the
-private worker copy.
+codex-reset-scheduler assumes the current operating-system user and the
+installed Codex CLI are trusted. It does not protect against an attacker who can
+replace the user's Node or Codex executable, control the account backend, or
+write arbitrary files as the current user. Runtime hashing detects changes to
+the private worker copy.
 
 The app-server protocol is experimental. Unknown outcomes and malformed required
 fields are treated as ambiguous or unsafe; they do not authorize a different

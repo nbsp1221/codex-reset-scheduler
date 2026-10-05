@@ -64,7 +64,7 @@ export async function disarmPlans(
   const state = await dependencies.store.load();
   if (state === null)
     throw new SafetyError(
-      "Codex ResetPilot is not initialized.",
+      "codex-reset-scheduler is not initialized.",
       "not_initialized",
     );
   const targets = selectPlans(state.plans, options.plan, options.all);
@@ -93,7 +93,7 @@ export async function readAuditLog(
       const state = await dependencies.store.load();
       if (state === null)
         throw new SafetyError(
-          "Codex ResetPilot is not initialized.",
+          "codex-reset-scheduler is not initialized.",
           "not_initialized",
         );
       planSelector = selectOne(state.plans, selector)[0]?.creditSelector;

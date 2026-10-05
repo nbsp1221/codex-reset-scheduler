@@ -71,7 +71,7 @@ export class StateStore {
       if (loaded === null) {
         if (!allowMissing)
           throw new SafetyError(
-            "Codex ResetPilot is not initialized.",
+            "codex-reset-scheduler is not initialized.",
             "not_initialized",
           );
         current = {
@@ -150,7 +150,7 @@ async function acquireLock(path: string): Promise<void> {
     }
   }
   throw new SafetyError(
-    "Another Codex ResetPilot process holds the state lock.",
+    "Another codex-reset-scheduler process holds the state lock.",
     "state_locked",
   );
 }

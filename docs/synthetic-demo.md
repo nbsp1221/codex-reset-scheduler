@@ -38,15 +38,15 @@ Selected lines from the synthetic run (UUIDs vary):
 
 ```text
 SYNTHETIC DEMO — actual CLI, fake Codex and scheduler, no consume, no native tasks.
-$ resetpilot doctor --json
+$ codex-reset-scheduler doctor --json
   doctor: OK (synthetic checks)
-$ resetpilot resets --timezone UTC --json
+$ codex-reset-scheduler resets --timezone UTC --json
   currently visible synthetic resets: 2; selected 6b7fdd4bf204
-$ resetpilot status --json
+$ codex-reset-scheduler status --json
   status: no plans
-$ resetpilot plan --credit 6b7fdd4bf204 --json
+$ codex-reset-scheduler plan --credit 6b7fdd4bf204 --json
   preview: one current synthetic credit, 10 minutes before expiry
-$ resetpilot arm --credit 6b7fdd4bf204 --dry-run --json
+$ codex-reset-scheduler arm --credit 6b7fdd4bf204 --dry-run --json
   dry-run: no state or scheduler files created
   status: armed; synthetic scheduler registered
   status: disarmed; synthetic scheduler removed
@@ -64,7 +64,7 @@ For a maintainer's local tarball validation, the script also accepts an explicit
 installed `dist/cli.js` path:
 
 ```sh
-node scripts/demo.mjs /absolute/prefix/lib/node_modules/codex-resetpilot/dist/cli.js
+node scripts/demo.mjs /absolute/prefix/lib/node_modules/codex-reset-scheduler/dist/cli.js
 ```
 
 The compiled fake fixture must still exist from `pnpm build:test`. `pnpm pack`

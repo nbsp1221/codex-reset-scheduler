@@ -1,9 +1,9 @@
 # Installation
 
-Codex ResetPilot is a release candidate. The package name is `codex-resetpilot`;
-the installed executable is `resetpilot`. A public registry release is not
-available yet. Package-name lookup results do not establish ownership or reserve
-a name.
+codex-reset-scheduler is a release candidate. The package name is
+`codex-reset-scheduler`; the installed executable is `codex-reset-scheduler`. A
+public registry release is not available yet. Package-name lookup results do not
+establish ownership or reserve a name.
 
 The project was previously named Resetrail. The repository URL and checkout
 directory remain `nbsp1221/resetrail` and `resetrail`. Existing private state
@@ -26,7 +26,7 @@ node dist/cli.js doctor
 
 Continue with `node dist/cli.js` for the
 [inspect, schedule, cancel, and result-check flow](../README.md#inspect-and-preview).
-Building a checkout does not put `resetpilot` on PATH.
+Building a checkout does not put `codex-reset-scheduler` on PATH.
 
 ## From a locally built tarball
 
@@ -37,29 +37,29 @@ pnpm check
 pnpm pack
 ```
 
-The resulting `codex-resetpilot-0.1.0.tgz` can be installed by a consumer with
-Node.js 22.14+ and npm. The package has no production dependencies and
+The resulting `codex-reset-scheduler-0.1.0.tgz` can be installed by a consumer
+with Node.js 22.14+ and npm. The package has no production dependencies and
 installation does not require pnpm. This example uses a separate prefix rather
 than changing an existing global installation:
 
 ```sh
-npm install --global --prefix ./resetpilot-local --ignore-scripts ./codex-resetpilot-0.1.0.tgz
+npm install --global --prefix ./codex-reset-scheduler-local --ignore-scripts ./codex-reset-scheduler-0.1.0.tgz
 ```
 
 On Linux/macOS, check the installed command:
 
 ```sh
-./resetpilot-local/bin/resetpilot version
-./resetpilot-local/bin/resetpilot --help
-./resetpilot-local/bin/resetpilot doctor
+./codex-reset-scheduler-local/bin/codex-reset-scheduler version
+./codex-reset-scheduler-local/bin/codex-reset-scheduler --help
+./codex-reset-scheduler-local/bin/codex-reset-scheduler doctor
 ```
 
 On Windows PowerShell, npm places the command directly in the prefix:
 
 ```powershell
-.\resetpilot-local\resetpilot.cmd version
-.\resetpilot-local\resetpilot.cmd --help
-.\resetpilot-local\resetpilot.cmd doctor
+.\codex-reset-scheduler-local\codex-reset-scheduler.cmd version
+.\codex-reset-scheduler-local\codex-reset-scheduler.cmd --help
+.\codex-reset-scheduler-local\codex-reset-scheduler.cmd doctor
 ```
 
 Use that same executable path for subsequent `resets`, `plan`, `arm`, `status`,
@@ -77,12 +77,12 @@ later.
 Only after registry publication, the intended commands are:
 
 ```sh
-npm install --global codex-resetpilot
-resetpilot doctor
+npm install --global codex-reset-scheduler
+codex-reset-scheduler doctor
 ```
 
-The CLI command name is not the npm package name. Use `codex-resetpilot` for
-package-manager operations and `resetpilot` to run the installed CLI.
+Use `codex-reset-scheduler` both for package-manager operations and to run the
+installed CLI.
 
 The current release workflow validates and uploads a tarball only.
 `publishConfig.provenance=true` remains in place. Publishing method, registry
@@ -91,9 +91,9 @@ authorize registry login, staging, or publication.
 
 ## Runtime and device requirements
 
-Codex ResetPilot needs a current Codex CLI and detailed banked reset rows for a
-ChatGPT Codex account. The scheduler needs a working systemd user manager on
-Linux or a logged-in session on macOS/Windows. Keep the device powered on and
+codex-reset-scheduler needs a current Codex CLI and detailed banked reset rows
+for a ChatGPT Codex account. The scheduler needs a working systemd user manager
+on Linux or a logged-in session on macOS/Windows. Keep the device powered on and
 connected to the network during the plan window.
 
 The worker uses a private snapshot and recorded absolute Node and Codex paths.

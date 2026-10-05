@@ -1,23 +1,59 @@
-# Codex ResetPilot
+# codex-reset-scheduler
 
-Schedule a currently visible banked Codex reset before it expires.
+Your Codex resets. Scheduled before expiry.
 
-Codex ResetPilot is a small local open-source CLI. You inspect a reset, review
-its schedule, confirm one exact credit, and check or cancel the plan. The
-operating system invokes the worker inside the final window; there is no
-resident Codex ResetPilot daemon. The device must be powered on, online, and
-have the required user session available. Delivery before expiry is not
-guaranteed.
+Schedule automatic redemption of your existing Codex banked resets before they
+expire.
 
-Codex ResetPilot is independent and is not affiliated with, endorsed by,
-sponsored by, or supported by OpenAI.
+A small local open-source CLI: inspect a currently visible reset, review its
+schedule, approve that exact credit, and check or cancel the plan. The operating
+system invokes the worker inside the final window; no resident daemon is needed.
+
+## Quick look
+
+No public npm release is available yet.
+[Build from source](#install-from-source) or
+[install a locally built tarball](docs/installation.md) first. From a built
+checkout:
+
+```sh
+node dist/cli.js resets
+node dist/cli.js plan --credit <selector> --before 10m
+node dist/cli.js arm --credit <selector> --before 10m
+node dist/cli.js status
+node dist/cli.js disarm --plan <plan-id>
+node dist/cli.js logs --plan <plan-id>
+```
+
+Copy the selector from `resets`, review the preview, and confirm
+`ARM <selector>` when prompted. After arming, save the plan ID; use `status` to
+check the schedule or result, and `disarm` to cancel it before execution. The
+npm package and installed command are both **codex-reset-scheduler**.
+
+## Safety boundary
+
+- Only currently visible resets that you explicitly approve are scheduled.
+  Future reset grants require a new explicit approval; there is no standing
+  authorization for future credits.
+- Immediately before redemption, the worker rechecks the account, exact credit,
+  expiry and execution window, and recorded runtime. It never chooses a fallback
+  credit.
+- The attempt UUID is persisted before sending and reused after ambiguity. A
+  complete fresh snapshot must confirm the exact target's retirement before the
+  plan is marked successful.
+
+The device must be powered on, online, and have the required user session or
+systemd user manager available. Delivery before expiry is not guaranteed. macOS
+real-device marker QA remains pending; see
+[platform support](docs/platform-support.md).
 
 > [!WARNING] Redeeming a banked reset is permanent. A full reset also changes
 > the weekly reset date. Review that tradeoff before confirming a schedule.
-> Codex ResetPilot always uses the selected credit ID and never chooses a
-> fallback credit.
 
-The project was previously named Resetrail. The new command shares its original
+codex-reset-scheduler is independent and is not affiliated with, endorsed by,
+sponsored by, or supported by OpenAI.
+
+The project was previously named Resetrail. The command shares its original
 state and scheduler namespaces; existing plans are not migrated or rescheduled.
 See [name-change compatibility](docs/name-change.md).
 
@@ -48,9 +84,9 @@ node dist/cli.js doctor
 ```
 
 The source checkout uses `node dist/cli.js` in the examples below. The package
-name is **codex-resetpilot** and its installed command is **resetpilot**.
-[Installation details](docs/installation.md) include a local tarball option
-whose consumer needs Node.js and npm, without pnpm.
+name is **codex-reset-scheduler** and its installed command is
+**codex-reset-scheduler**. [Installation details](docs/installation.md) include
+a local tarball option whose consumer needs Node.js and npm, without pnpm.
 
 To try the full flow with fake data and no Codex account, see the
 [synthetic CLI demo](docs/synthetic-demo.md).
@@ -123,8 +159,8 @@ are never treated as proof of success.
 
 ## Safety and privacy
 
-Banked resets are distinct from purchased usage credits. Codex ResetPilot does
-not buy usage, configure auto-reload, or change paid-credit settings.
+Banked resets are distinct from purchased usage credits. codex-reset-scheduler
+does not buy usage, configure auto-reload, or change paid-credit settings.
 
 - Exact credit/account/runtime binding; no backend-selected fallback
 - UUID persisted before consume and reused after ambiguous failures
@@ -135,25 +171,25 @@ not buy usage, configure auto-reload, or change paid-credit settings.
 - Sanitized logs without raw credit IDs, email addresses, or credentials
 - Dry-run commands that create no state or scheduler entries
 
-Codex ResetPilot starts the local `codex app-server`. It does not read
+codex-reset-scheduler starts the local `codex app-server`. It does not read
 `auth.json`, Keychain, Credential Manager, tokens, or cookies, and has no
 telemetry. An armed scheduler uses the private worker snapshot and recorded
 absolute Node and Codex paths, independently of package-manager caches.
 
 ## Commands
 
-The installed `resetpilot` command accepts:
+The installed `codex-reset-scheduler` command accepts:
 
 ```text
-resetpilot doctor [--json]
-resetpilot resets [--timezone <IANA>] [--json]
-resetpilot plan [--credit <selector> | --all] [--before 10m] [--json]
-resetpilot arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
-resetpilot status [--plan <id-or-selector>] [--json]
-resetpilot disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
-resetpilot logs [--plan <id-or-selector>] [--json]
-resetpilot gc [--dry-run] [--json]
-resetpilot version [--json]
+codex-reset-scheduler doctor [--json]
+codex-reset-scheduler resets [--timezone <IANA>] [--json]
+codex-reset-scheduler plan [--credit <selector> | --all] [--before 10m] [--json]
+codex-reset-scheduler arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
+codex-reset-scheduler status [--plan <id-or-selector>] [--json]
+codex-reset-scheduler disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
+codex-reset-scheduler logs [--plan <id-or-selector>] [--json]
+codex-reset-scheduler gc [--dry-run] [--json]
+codex-reset-scheduler version [--json]
 ```
 
 For a reviewed non-interactive run, use `--yes` after reviewing

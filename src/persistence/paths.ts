@@ -15,7 +15,7 @@ export type ManagedPaths = Readonly<{
 }>;
 
 // Keep the original namespace: existing plans, locks and runtime snapshots
-// must remain shared across the Resetrail and Codex ResetPilot commands.
+// must remain shared across the Resetrail and codex-reset-scheduler commands.
 export function managedPaths(
   options: {
     platform?: NodeJS.Platform;
