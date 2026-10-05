@@ -31,6 +31,6 @@ its failure cases are tested.
 
 ## Clean-room implementation
 
-Resetrail is MIT licensed. Community projects may inform behavioral research,
-but do not copy third-party source into this repository without a deliberate
-license review and preserved attribution.
+codex-reset-scheduler is MIT licensed. Community projects may inform behavioral
+research, but do not copy third-party source into this repository without a
+deliberate license review and preserved attribution.

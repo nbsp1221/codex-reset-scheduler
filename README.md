@@ -53,9 +53,11 @@ real-device marker QA remains pending; see
 codex-reset-scheduler is independent and is not affiliated with, endorsed by,
 sponsored by, or supported by OpenAI.
 
-The project was previously named Resetrail. The command shares its original
-state and scheduler namespaces; existing plans are not migrated or rescheduled.
-See [name-change compatibility](docs/name-change.md).
+The project was previously named Resetrail.
+
+The command shares its original state and scheduler namespaces; existing plans
+are not migrated or rescheduled. See
+[name-change compatibility](docs/name-change.md).
 
 ## Release status
 
@@ -75,8 +77,8 @@ logged-in LaunchAgent session on macOS, or a logged-in Task Scheduler session on
 Windows.
 
 ```sh
-git clone https://github.com/nbsp1221/resetrail.git
-cd resetrail
+git clone https://github.com/nbsp1221/codex-reset-scheduler.git
+cd codex-reset-scheduler
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build

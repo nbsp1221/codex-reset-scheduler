@@ -2,9 +2,15 @@
 
 The current product name is **codex-reset-scheduler**, the npm package is
 **codex-reset-scheduler**, and the installed command is
-**codex-reset-scheduler**. The project was previously named Resetrail. The
-GitHub repository remains `https://github.com/nbsp1221/resetrail`; cloning it
-still creates a `resetrail` checkout directory.
+**codex-reset-scheduler**.
+
+The project was previously named Resetrail.
+
+The current GitHub repository is
+`https://github.com/nbsp1221/codex-reset-scheduler`; cloning it creates a
+`codex-reset-scheduler` checkout directory. Repository URLs and checkout names
+use the current product name; the private namespaces below retain their original
+identity.
 
 A registry release is still a separate decision. The absence of a public npm
 release does not establish that nobody has used a source checkout or a local
