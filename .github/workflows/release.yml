@@ -24,7 +24,7 @@ jobs:
       - run: pnpm pack --pack-destination release-artifact
       - uses: actions/upload-artifact@v4
         with:
-          name: codex-resetrail-package
+          name: codex-reset-scheduler-package
           path: release-artifact/*.tgz
           if-no-files-found: error
 

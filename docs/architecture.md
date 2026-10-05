@@ -1,6 +1,7 @@
 # Architecture
 
-Resetrail separates irreversible policy from operating-system delivery.
+codex-reset-scheduler separates irreversible policy from operating-system
+delivery.
 
 ```text
 CLI read/preview

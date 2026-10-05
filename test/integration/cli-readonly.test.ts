@@ -7,6 +7,7 @@ import {
   type ReadSession,
 } from "../../src/cli-core.js";
 import type { RateLimitsSnapshot } from "../../src/domain/types.js";
+import { VERSION } from "../../src/version.js";
 
 const future = Math.floor(Date.now() / 1_000) + 3_600;
 
@@ -101,12 +102,19 @@ test("help documents every confirmation and machine-output option", async () => 
   const { dependencies, stdout } = harness();
   assert.equal(await runCli(["--help"], dependencies), 0);
   const output = stdout.join("");
-  assert.match(output, /resetrail arm .* \[--yes\] \[--dry-run\] \[--json\]/u);
+  assert.match(output, /^codex-reset-scheduler /u);
   assert.match(
     output,
-    /resetrail disarm .* \[--yes\] \[--dry-run\] \[--json\]/u,
+    /codex-reset-scheduler arm .* \[--yes\] \[--dry-run\] \[--json\]/u,
   );
-  assert.match(output, /resetrail logs \[--plan <id-or-selector>\]/u);
+  assert.match(
+    output,
+    /codex-reset-scheduler disarm .* \[--yes\] \[--dry-run\] \[--json\]/u,
+  );
+  assert.match(
+    output,
+    /codex-reset-scheduler logs \[--plan <id-or-selector>\]/u,
+  );
 });
 
 test("doctor returns a failing health status when a required scheduler check fails", async () => {
@@ -142,4 +150,18 @@ test("interactive JSON arming is rejected before any mutation path", async () =>
     error: { code: string };
   };
   assert.equal(error.error.code, "confirmation_required");
+});
+
+test("version and human errors use the new CLI name without account access", async () => {
+  const { dependencies, stdout, stderr } = harness();
+  const isolated = {
+    ...dependencies,
+    connect: () => {
+      throw new Error("This command must not connect to an account.");
+    },
+  };
+  assert.equal(await runCli(["version"], isolated), 0);
+  assert.equal(stdout.join(""), `codex-reset-scheduler ${VERSION}\n`);
+  assert.equal(await runCli(["unknown-command"], isolated), 1);
+  assert.match(stderr.join(""), /^codex-reset-scheduler: /u);
 });

@@ -428,7 +428,7 @@ function output(
 }
 
 function renderHuman(command: string, data: unknown): string {
-  if (command === "version") return `resetrail ${VERSION}`;
+  if (command === "version") return `codex-reset-scheduler ${VERSION}`;
   if (command === "doctor") {
     const value = data as Record<string, unknown> & {
       scheduler: DoctorSchedulerReport;
@@ -440,7 +440,7 @@ function renderHuman(command: string, data: unknown): string {
           `- ${check.name}${check.required ? " (required)" : " (advisory)"}: ${check.hint ?? "unavailable"}`,
       );
     return [
-      `Resetrail doctor: ${value.ok === true ? "OK" : "ATTENTION"}`,
+      `codex-reset-scheduler doctor: ${value.ok === true ? "OK" : "ATTENTION"}`,
       `Node: ${String(value.node)}`,
       `Platform: ${String(value.platform)} (${String(value.architecture)})`,
       `Codex: ${String(value.codexVersion)}`,
@@ -515,25 +515,25 @@ function reportError(
       `${JSON.stringify({ schemaVersion: 1, ok: false, error: { code: resetrail.code, message: resetrail.message } }, null, 2)}\n`,
     );
   } else {
-    dependencies.stderr(`resetrail: ${resetrail.message}\n`);
+    dependencies.stderr(`codex-reset-scheduler: ${resetrail.message}\n`);
   }
   return resetrail.exitCode;
 }
 
 function helpText(): string {
-  return `Resetrail ${VERSION}
-Safe, deterministic scheduling for expiring Codex rate-limit resets.
+  return `codex-reset-scheduler ${VERSION}
+Schedule automatic redemption of your existing Codex banked resets before they expire.
 
 Usage:
-  resetrail doctor [--json]
-  resetrail resets [--timezone <IANA>] [--json]
-  resetrail plan [--credit <selector> | --all] [--before 10m] [--json]
-  resetrail arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
-  resetrail status [--plan <id-or-selector>] [--json]
-  resetrail disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
-  resetrail logs [--plan <id-or-selector>] [--json]
-  resetrail gc [--dry-run] [--json]
-  resetrail version [--json]
+  codex-reset-scheduler doctor [--json]
+  codex-reset-scheduler resets [--timezone <IANA>] [--json]
+  codex-reset-scheduler plan [--credit <selector> | --all] [--before 10m] [--json]
+  codex-reset-scheduler arm [--credit <selector> | --all] [--before 10m] [--yes] [--dry-run] [--json]
+  codex-reset-scheduler status [--plan <id-or-selector>] [--json]
+  codex-reset-scheduler disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
+  codex-reset-scheduler logs [--plan <id-or-selector>] [--json]
+  codex-reset-scheduler gc [--dry-run] [--json]
+  codex-reset-scheduler version [--json]
 
 No command consumes a reset without an explicitly armed exact credit plan.
 `;

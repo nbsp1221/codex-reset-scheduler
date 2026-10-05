@@ -57,6 +57,7 @@ test("systemd artifacts contain exact triggers but no raw credit ID", () => {
     run,
   );
   const preview = scheduler.preview(plan("systemd"), action);
+  assert.equal(preview.artifactId, "resetrail-plan-a");
   const text = preview.files.map((file) => file.content).join("\n");
   assert.match(text, /OnCalendar=2026-01-01 23:50:00 UTC/);
   assert.match(text, /NoNewPrivileges=true/);
@@ -69,8 +70,9 @@ test("launchd artifacts use argument arrays and calendar intervals", () => {
     run,
     501,
   );
-  const text =
-    scheduler.preview(plan("launchd"), action).files[0]?.content ?? "";
+  const preview = scheduler.preview(plan("launchd"), action);
+  assert.equal(preview.artifactId, "dev.resetrail.plan.plan-a");
+  const text = preview.files[0]?.content ?? "";
   assert.match(text, /<key>ProgramArguments<\/key>/);
   assert.match(text, /<key>RunAtLoad<\/key><true\/>/);
   assert.doesNotMatch(text, /synthetic-credit-secret/);
@@ -78,8 +80,9 @@ test("launchd artifacts use argument arrays and calendar intervals", () => {
 
 test("Windows task is least-privilege, interactive, bounded, and secret-free", () => {
   const scheduler = new WindowsScheduler(run, "DOMAIN\\test");
-  const text =
-    scheduler.preview(plan("task-scheduler"), action).files[0]?.content ?? "";
+  const preview = scheduler.preview(plan("task-scheduler"), action);
+  assert.equal(preview.artifactId, "\\Resetrail\\plan-a");
+  const text = preview.files[0]?.content ?? "";
   assert.match(text, /<LogonType>InteractiveToken<\/LogonType>/);
   assert.match(
     text,

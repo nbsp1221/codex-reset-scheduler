@@ -141,7 +141,7 @@ function renderTask(
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Resetrail exact reset ${xmlEscape(plan.creditSelector)}</Description>
+    <Description>codex-reset-scheduler exact reset ${xmlEscape(plan.creditSelector)}</Description>
     <URI>${xmlEscape(name)}</URI>
   </RegistrationInfo>
   <Triggers>

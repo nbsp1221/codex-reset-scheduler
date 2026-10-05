@@ -63,7 +63,10 @@ export async function disarmPlans(
   }
   const state = await dependencies.store.load();
   if (state === null)
-    throw new SafetyError("Resetrail is not initialized.", "not_initialized");
+    throw new SafetyError(
+      "codex-reset-scheduler is not initialized.",
+      "not_initialized",
+    );
   const targets = selectPlans(state.plans, options.plan, options.all);
   if (options.dryRun) {
     return { dryRun: true, plans: targets.map(sanitizedPlan) };
@@ -90,7 +93,7 @@ export async function readAuditLog(
       const state = await dependencies.store.load();
       if (state === null)
         throw new SafetyError(
-          "Resetrail is not initialized.",
+          "codex-reset-scheduler is not initialized.",
           "not_initialized",
         );
       planSelector = selectOne(state.plans, selector)[0]?.creditSelector;
