@@ -17,6 +17,12 @@ Markdown and GitHub YAML must not describe the product under a retired name.
 Retired repository URLs are rejected outside the exact historical records and
 the checker regression fixture file.
 
+The security issue configuration must match the current explicit canonical
+block, including the active `Security vulnerability` name and URL. LF/CRLF and
+trailing whitespace at the end of the file are accepted. This narrow contract
+rejects URLs hidden in comments or other contacts; review and update it
+explicitly if the configuration structure changes.
+
 ## Intentional residual references
 
 - Six named files under `docs/plans` and `docs/validation` preserve their

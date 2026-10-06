@@ -134,15 +134,24 @@ export function checkBranding(files) {
         );
     }
   }
+  // Keep this small configuration explicit instead of interpreting general YAML.
+  // The URL must belong to the active security contact, never a decoy elsewhere.
+  const canonicalSecurityConfig = [
+    "blank_issues_enabled: false",
+    "contact_links:",
+    "  - name: Security vulnerability",
+    "    url: " + repository + "/security/advisories/new",
+    "    about: Report security issues privately instead of opening a public issue.",
+  ].join("\n");
   if (
-    !(files.get(".github/ISSUE_TEMPLATE/config.yml") ?? "").includes(
-      "url: " + repository + "/security/advisories/new",
-    )
+    (files.get(".github/ISSUE_TEMPLATE/config.yml") ?? "")
+      .replace(/\r\n/gu, "\n")
+      .trimEnd() !== canonicalSecurityConfig
   )
     fail(
       ".github/ISSUE_TEMPLATE/config.yml",
       1,
-      "security reporting must use the canonical repository",
+      "security reporting must match the canonical active security contact configuration",
     );
   return findings;
 }

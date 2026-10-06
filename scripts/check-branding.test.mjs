@@ -35,6 +35,45 @@ test("current files pass with documented history and namespace mentions", () => 
   assert.deepEqual(checkBranding(files), []);
 });
 
+test("the active security contact cannot borrow the canonical URL", () => {
+  const path = ".github/ISSUE_TEMPLATE/config.yml";
+  const advisory = repository + "/security/advisories/new";
+  const original = files.get(path);
+  const wrong = original.replace(advisory, "https://example.invalid/report");
+  for (const config of [
+    wrong + "# url: " + advisory + "\n",
+    wrong + "  - name: Project home\n    url: " + advisory + "\n",
+    wrong +
+      original
+        .split("\n")
+        .map((line) => "# " + line)
+        .join("\n"),
+    original.replace("Security vulnerability", "Project home"),
+    original.replace(
+      "    about:",
+      "    url: https://example.invalid/report\n    about:",
+    ),
+  ]) {
+    const fixture = new Map(files);
+    fixture.set(path, config);
+    rejected(fixture, "canonical active security contact configuration");
+  }
+});
+
+test("the canonical security configuration permits LF and CRLF endings", () => {
+  const path = ".github/ISSUE_TEMPLATE/config.yml";
+  const original = files.get(path);
+  for (const config of [
+    original.trimEnd(),
+    original.replace(/\n/gu, "\r\n"),
+    original + "\n \t\n",
+  ]) {
+    const fixture = new Map(files);
+    fixture.set(path, config);
+    assert.deepEqual(checkBranding(fixture), []);
+  }
+});
+
 test("retired URL in the hidden security issue configuration fails", () => {
   rejected(
     changed(".github/ISSUE_TEMPLATE/config.yml", (text) =>
@@ -229,6 +268,14 @@ test("the CLI exits nonzero for isolated bad URL, checkout and brand fixtures", 
         repository,
         oldRepository,
         "retired repository URL",
+      ],
+      [
+        ".github/ISSUE_TEMPLATE/config.yml",
+        "    url: " + repository + "/security/advisories/new",
+        "    url: https://example.invalid/report\n# url: " +
+          repository +
+          "/security/advisories/new",
+        "canonical active security contact configuration",
       ],
       [
         "README.md",
