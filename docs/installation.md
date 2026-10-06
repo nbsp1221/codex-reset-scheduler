@@ -5,9 +5,11 @@ codex-reset-scheduler is a release candidate. The package name is
 public registry release is not available yet. Package-name lookup results do not
 establish ownership or reserve a name.
 
-The project was previously named Resetrail. The repository URL and checkout
-directory remain `nbsp1221/resetrail` and `resetrail`. Existing private state
-and schedules keep their original names; see
+The project was previously named Resetrail.
+
+The current repository and default checkout directory are
+`nbsp1221/codex-reset-scheduler` and `codex-reset-scheduler`. Existing private
+state and schedules keep their original names; see
 [compatibility notes](name-change.md).
 
 ## From source
@@ -15,8 +17,8 @@ and schedules keep their original names; see
 Use Node.js 22.14 or newer and pnpm 10.33.4:
 
 ```sh
-git clone https://github.com/nbsp1221/resetrail.git
-cd resetrail
+git clone https://github.com/nbsp1221/codex-reset-scheduler.git
+cd codex-reset-scheduler
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build

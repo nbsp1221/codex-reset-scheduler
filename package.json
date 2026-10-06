@@ -25,20 +25,21 @@
     "format:check": "prettier --check .",
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm build && pnpm pack:dry",
-    "prepack": "pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm branding:check && pnpm security:secrets && pnpm test && pnpm build && pnpm pack:dry",
+    "prepack": "pnpm build",
+    "branding:check": "node scripts/check-branding.mjs && node --test scripts/check-branding.test.mjs"
   },
   "engines": {
     "node": ">=22.14.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nbsp1221/resetrail.git"
+    "url": "git+https://github.com/nbsp1221/codex-reset-scheduler.git"
   },
   "bugs": {
-    "url": "https://github.com/nbsp1221/resetrail/issues"
+    "url": "https://github.com/nbsp1221/codex-reset-scheduler/issues"
   },
-  "homepage": "https://github.com/nbsp1221/resetrail#readme",
+  "homepage": "https://github.com/nbsp1221/codex-reset-scheduler#readme",
   "keywords": [
     "codex",
     "banked-reset",
