@@ -42,8 +42,8 @@ jobs:
           node-version: 22.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build:test
       - run: pnpm build
+      - run: pnpm exec tsc -p tsconfig.test.json
       - name: Observe installed CLI and natural production worker execution
         run:
           node scripts/native-product-flow.mjs --report
