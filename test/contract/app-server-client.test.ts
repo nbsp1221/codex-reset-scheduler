@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -136,3 +136,92 @@ async function connectFake(
     environment: { ...process.env, ...environment },
   });
 }
+
+test("file-backed fake credits retire and preserve UUID results across app-server processes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "resetrail-native-fixture-"));
+  const stateFile = join(directory, "fake.json");
+  const productStateFile = join(directory, "product.json");
+  const requestLog = join(directory, "requests.jsonl");
+  const key = "00000000-0000-4000-8000-000000000002";
+  const creditId = "synthetic-persistent-target";
+  await writeFile(
+    productStateFile,
+    JSON.stringify({
+      plans: [
+        {
+          planId: "synthetic-plan",
+          status: "attempting",
+          creditId,
+          attempt: { idempotencyKey: key },
+        },
+      ],
+    }),
+  );
+  await writeFile(
+    stateFile,
+    JSON.stringify({
+      nonce: "synthetic-nonce",
+      accountEmail: "synthetic@example.invalid",
+      requestLog,
+      productStateFile,
+      credits: [
+        {
+          id: creditId,
+          resetType: "codexRateLimits",
+          status: "available",
+          grantedAt: 1000,
+          expiresAt: 10000,
+          title: "Synthetic",
+          description: "Fixture only",
+        },
+      ],
+      results: {},
+    }),
+  );
+  try {
+    const first = await connectFake({ RESETRAIL_FAKE_STATE_FILE: stateFile });
+    try {
+      assert.equal(
+        (await first.readRateLimits()).resetCredits?.availableCount,
+        1,
+      );
+      assert.equal(await first.consumeExactCredit(creditId, key), "reset");
+    } finally {
+      await first.close();
+    }
+    const second = await connectFake({ RESETRAIL_FAKE_STATE_FILE: stateFile });
+    try {
+      assert.equal(
+        (await second.readRateLimits()).resetCredits?.availableCount,
+        0,
+      );
+      assert.equal(await second.consumeExactCredit(creditId, key), "reset");
+    } finally {
+      await second.close();
+    }
+    const saved = JSON.parse(await readFile(stateFile, "utf8")) as {
+      credits: unknown[];
+      results: Record<string, unknown>;
+    };
+    assert.deepEqual(saved.credits, []);
+    assert.deepEqual(saved.results[key], { creditId, outcome: "reset" });
+    const consumed = (await readFile(requestLog, "utf8"))
+      .trim()
+      .split("\n")
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            method: string;
+            pid: number;
+            persistedAttempt?: { idempotencyKey: string };
+          },
+      )
+      .filter((m) => m.method === "account/rateLimitResetCredit/consume");
+    assert.equal(new Set(consumed.map((m) => m.pid)).size, 2);
+    assert.ok(
+      consumed.every((m) => m.persistedAttempt?.idempotencyKey === key),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

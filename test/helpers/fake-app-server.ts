@@ -1,7 +1,50 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline";
 
-const requestLog = process.env.RESETRAIL_FAKE_REQUEST_LOG;
+// Opt-in file state for separate CLI/worker processes in native product QA.
+const stateFile = process.env.RESETRAIL_FAKE_STATE_FILE;
+type Fixture = {
+  nonce: string;
+  accountEmail: string;
+  requestLog: string;
+  productStateFile: string;
+  credits: {
+    id: string;
+    resetType: string;
+    status: string;
+    grantedAt: number;
+    expiresAt: number;
+    title: string;
+    description: string;
+  }[];
+  results: Record<string, { creditId: string; outcome: string }>;
+};
+function fixture(): Fixture | null {
+  return stateFile === undefined
+    ? null
+    : (JSON.parse(readFileSync(stateFile, "utf8")) as Fixture);
+}
+const native = fixture();
+const startedAt = new Date().toISOString();
+const identity =
+  native === null
+    ? "legacy-fixture"
+    : process.platform === "win32"
+      ? spawnSync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+          ],
+          { encoding: "utf8", windowsHide: true },
+        ).stdout.trim()
+      : `uid:${process.getuid?.()}`;
+const identityHash = createHash("sha256").update(identity).digest("hex");
+const requestLog = native?.requestLog ?? process.env.RESETRAIL_FAKE_REQUEST_LOG;
 const epochSeconds = Number(process.env.RESETRAIL_FAKE_EPOCH_SECONDS ?? "0");
 const lines = createInterface({ input: process.stdin });
 
@@ -15,7 +58,47 @@ function reply(id: number, result: unknown, method?: string): void {
 
 lines.on("line", (line) => {
   const message = JSON.parse(line) as Record<string, unknown>;
-  if (requestLog !== undefined) appendFileSync(requestLog, `${line}\n`, "utf8");
+  const current = fixture();
+  let persistedAttempt: unknown;
+  if (
+    current !== null &&
+    message.method === "account/rateLimitResetCredit/consume"
+  ) {
+    const params = message.params as {
+      creditId: string;
+      idempotencyKey: string;
+    };
+    const state = JSON.parse(
+      readFileSync(current.productStateFile, "utf8"),
+    ) as {
+      plans: {
+        planId: string;
+        status: string;
+        creditId: string;
+        attempt: { idempotencyKey: string } | null;
+      }[];
+    };
+    const plan = state.plans.find((p) => p.creditId === params.creditId);
+    if (
+      plan?.status !== "attempting" ||
+      plan.attempt?.idempotencyKey !== params.idempotencyKey
+    )
+      throw new Error(
+        "Fake consume requires the matching UUID already persisted by the product worker.",
+      );
+    persistedAttempt = {
+      planId: plan.planId,
+      status: plan.status,
+      creditId: plan.creditId,
+      idempotencyKey: plan.attempt.idempotencyKey,
+    };
+  }
+  if (requestLog !== undefined)
+    appendFileSync(
+      requestLog,
+      `${JSON.stringify(current === null ? message : { ...message, nonce: current.nonce, pid: process.pid, parentPid: process.ppid, identityHash, startedAt, receivedAt: new Date().toISOString(), ...(persistedAttempt === undefined ? {} : { persistedAttempt }) })}\n`,
+      "utf8",
+    );
   if (typeof message.id !== "number" || typeof message.method !== "string")
     return;
   if (message.method === "initialize")
@@ -26,7 +109,7 @@ lines.on("line", (line) => {
       {
         account: {
           type: "chatgpt",
-          email: "synthetic@example.invalid",
+          email: current?.accountEmail ?? "synthetic@example.invalid",
           planType: "pro",
         },
         requiresOpenaiAuth: true,
@@ -54,8 +137,8 @@ lines.on("line", (line) => {
         },
         rateLimitsByLimitId: null,
         rateLimitResetCredits: {
-          availableCount: 2,
-          credits: [
+          availableCount: current?.credits.length ?? 2,
+          credits: current?.credits ?? [
             {
               id: "synthetic-credit-a",
               resetType: "codexRateLimits",
@@ -87,11 +170,35 @@ lines.on("line", (line) => {
       );
       return;
     }
+    if (current !== null && stateFile !== undefined) {
+      const params = message.params as {
+        creditId: string;
+        idempotencyKey: string;
+      };
+      const previous = current.results[params.idempotencyKey];
+      if (previous !== undefined && previous.creditId !== params.creditId)
+        throw new Error(
+          "A fake request UUID cannot be rebound to another target.",
+        );
+      const outcome =
+        previous?.outcome ??
+        (current.credits.some((c) => c.id === params.creditId)
+          ? "reset"
+          : "noCredit");
+      current.results[params.idempotencyKey] = {
+        creditId: params.creditId,
+        outcome,
+      };
+      if (outcome === "reset")
+        current.credits = current.credits.filter(
+          (c) => c.id !== params.creditId,
+        );
+      writeFileSync(stateFile, JSON.stringify(current), { mode: 0o600 });
+      return reply(message.id, { outcome }, message.method);
+    }
     return reply(
       message.id,
-      {
-        outcome: process.env.RESETRAIL_FAKE_OUTCOME ?? "reset",
-      },
+      { outcome: process.env.RESETRAIL_FAKE_OUTCOME ?? "reset" },
       message.method,
     );
   }
