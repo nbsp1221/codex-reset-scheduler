@@ -6,6 +6,14 @@ One plan authorizes one exact currently detailed reset credit. `arm --all`
 creates several such plans; it does not create a count-based or future-credit
 authorization.
 
+Interactive arming keeps the reviewed exact credit IDs in memory until
+confirmation. It then reconnects and checks the account, Codex executable and
+version, credit details, and remaining scheduler time before writing state. New
+credits are excluded; changed or missing approved credits require a new review.
+This applies to `--all`, an explicit selector, and the default earliest expiry
+selection. A separate `--dry-run` invocation does not grant approval to a later
+command; `--yes` authorizes the selection visible to that invocation.
+
 ## State machine
 
 ```text

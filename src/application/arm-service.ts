@@ -60,6 +60,7 @@ export type ArmDependencies = Readonly<{
   nodeExecutable: string;
   codexHome: string;
   home: string;
+  confirm?: (preview: ArmResult) => Promise<void>;
 }>;
 
 export type ArmLiveCodex = Readonly<{
@@ -97,19 +98,19 @@ export async function armResets(
       "invalid_arguments",
     );
   }
-  const live = await dependencies.connect();
+  let live: ArmLiveCodex | undefined = await dependencies.connect();
   try {
-    const [account, limits] = await Promise.all([
+    let [account, limits] = await Promise.all([
       live.client.readAccount(),
       live.client.readRateLimits(),
     ]);
-    const now = dependencies.now();
+    let now = dependencies.now();
     const nowSeconds = Math.floor(now.getTime() / 1_000);
     const eligible = eligibleCredits(
       limits.resetCredits?.credits ?? null,
       nowSeconds,
     );
-    const selected = options.all
+    let selected = options.all
       ? eligible
       : [selectCredit(eligible, options.selector)];
     if (selected.length === 0) {
@@ -119,7 +120,7 @@ export async function armResets(
       );
     }
 
-    if (options.dryRun) {
+    if (options.dryRun || dependencies.confirm !== undefined) {
       const syntheticRuntime: RuntimeSnapshot = {
         version: "current",
         sha256: "dry-run",
@@ -133,18 +134,19 @@ export async function armResets(
           "cli.js",
         ),
       };
+      const previewLive = live;
       const plans = selected.map((credit) =>
         makePlan({
           credit,
           accountFingerprint: "dry-run",
           runtime: syntheticRuntime,
-          live,
+          live: previewLive,
           now,
           beforeSeconds: options.beforeSeconds,
           dependencies,
         }),
       );
-      return result(
+      const preview = result(
         true,
         plans,
         plans.map((plan) =>
@@ -154,8 +156,83 @@ export async function armResets(
           ),
         ),
       );
+      if (options.dryRun) return preview;
+
+      // Keep approval private to this invocation; never resolve selectors again.
+      const approved = selected.map((credit) => ({ ...credit }));
+      const salt = randomUUID();
+      const approvedAccount = accountFingerprint(account, salt);
+      const approvedExecutable = live.executable;
+      const approvedVersion = live.version;
+      const approvedNode = dependencies.nodeExecutable;
+      const approvedCodexHome = dependencies.codexHome;
+      await dependencies.confirm?.(preview);
+
+      const previous = live;
+      live = undefined;
+      await previous.client.close();
+      live = await dependencies.connect();
+      [account, limits] = await Promise.all([
+        live.client.readAccount(),
+        live.client.readRateLimits(),
+      ]);
+      now = dependencies.now();
+      if (
+        accountFingerprint(account, salt) !== approvedAccount ||
+        live.executable !== approvedExecutable ||
+        live.version !== approvedVersion ||
+        dependencies.nodeExecutable !== approvedNode ||
+        dependencies.codexHome !== approvedCodexHome
+      ) {
+        throw new SafetyError(
+          "The account or runtime changed during confirmation; review and arm again.",
+          "approval_context_changed",
+        );
+      }
+      if (limits.resetCredits?.detailsComplete !== true) {
+        throw new SafetyError(
+          "Complete reset details are required after confirmation; review and arm again.",
+          "approval_target_changed",
+        );
+      }
+      const current = eligibleCredits(
+        limits.resetCredits.credits,
+        Math.floor(now.getTime() / 1_000),
+      );
+      const approvedIds = new Set(approved.map((credit) => credit.id));
+      selected = approved.map((credit) => {
+        const matches = current.filter(
+          (candidate) => candidate.id === credit.id,
+        );
+        const match = matches[0];
+        if (
+          approvedIds.size !== approved.length ||
+          matches.length !== 1 ||
+          match?.grantedAt !== credit.grantedAt ||
+          match.expiresAt !== credit.expiresAt ||
+          credit.expiresAt === null
+        ) {
+          throw new SafetyError(
+            "An approved reset changed or is unavailable; review and arm again.",
+            "approval_target_changed",
+          );
+        }
+        // Recheck scheduler timing after the prompt, before any state writes.
+        const trigger = buildTriggerPlan({
+          expiresAt: credit.expiresAt,
+          beforeSeconds: options.beforeSeconds,
+          nowSeconds: Math.floor(now.getTime() / 1_000),
+        });
+        normalizeTriggerTimes(
+          dependencies.paths.platform,
+          trigger.triggerTimes,
+          trigger.expiresAt,
+        );
+        return credit;
+      });
     }
 
+    const armedLive = live;
     const initial = await dependencies.store.initialize();
     const fingerprint = accountFingerprint(account, initial.accountSalt);
     const runtime = await dependencies.installRuntime(dependencies.paths);
@@ -164,7 +241,7 @@ export async function armResets(
         credit,
         accountFingerprint: fingerprint,
         runtime,
-        live,
+        live: armedLive,
         now,
         beforeSeconds: options.beforeSeconds,
         dependencies,
@@ -231,7 +308,7 @@ export async function armResets(
       ),
     );
   } finally {
-    await live.client.close();
+    await live?.client.close();
   }
 }
 

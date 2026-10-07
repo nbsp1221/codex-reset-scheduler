@@ -11,7 +11,10 @@ import {
 } from "./domain/policy.js";
 import { connectLiveCodex } from "./codex/live.js";
 import { VERSION } from "./version.js";
-import { armResets } from "./application/arm-service.js";
+import {
+  armResets,
+  defaultArmDependencies,
+} from "./application/arm-service.js";
 import {
   disarmPlans,
   garbageCollect,
@@ -143,12 +146,18 @@ export async function runCli(
             2,
           );
         }
-        if (!dryRun && !yes) {
-          const preview = await armResets({ ...armOptions, dryRun: true });
-          output("arm", preview, json, dependencies);
-          await confirmArm(preview.plans.map((plan) => plan.selector));
-        }
-        const armed = await armResets(armOptions);
+        const armDependencies = defaultArmDependencies();
+        const armed = await armResets(armOptions, {
+          ...armDependencies,
+          ...(!dryRun && !yes
+            ? {
+                confirm: async (preview) => {
+                  output("arm", preview, json, dependencies);
+                  await confirmArm(preview.plans.map((plan) => plan.selector));
+                },
+              }
+            : {}),
+        });
         output("arm", armed, json, dependencies);
         return 0;
       }

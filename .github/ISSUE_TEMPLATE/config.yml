@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Security vulnerability
-    url: https://github.com/nbsp1221/codex-reset-scheduler/security/advisories/new
-    about: Report security issues privately instead of opening a public issue.

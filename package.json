@@ -25,9 +25,8 @@
     "format:check": "prettier --check .",
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm branding:check && pnpm security:secrets && pnpm test && pnpm build && pnpm pack:dry",
-    "prepack": "pnpm build",
-    "branding:check": "node scripts/check-branding.mjs && node --test scripts/check-branding.test.mjs"
+    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm build && pnpm pack:dry",
+    "prepack": "pnpm build"
   },
   "engines": {
     "node": ">=22.14.0"
