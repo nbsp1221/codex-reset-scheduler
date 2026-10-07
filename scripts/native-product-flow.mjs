@@ -1,18 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { execFile, spawnSync } from "node:child_process";
-import {
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { arch, homedir, release } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { URL, fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { inspectSchedulerEnvironment } from "../dist/application/doctor-service.js";
@@ -22,13 +15,20 @@ import { managedPaths } from "../dist/persistence/paths.js";
 import { hashDirectory } from "../dist/runtime/installer.js";
 import { schedulerAdapter } from "../dist/scheduler/index.js";
 
+import {
+  ownedPlans,
+  recordTree,
+  removeRecordedTree,
+} from "./native-product-cleanup.mjs";
+
 // Only Codex is fake. Package, CLI, scheduler, snapshot, worker and state are real.
-const script = fileURLToPath(import.meta.url);
 const repository = fileURLToPath(new URL("../", import.meta.url));
 const digest = (data) => createHash("sha256").update(data).digest("hex");
 const sourceFiles = [
   "scripts/native-product-flow.mjs",
   "test/helpers/fake-app-server.ts",
+  "scripts/native-product-cleanup.mjs",
+  "test/fixtures/fake-codex-launcher.cs",
 ];
 const codeHashes = Object.fromEntries(
   await Promise.all(
@@ -169,22 +169,14 @@ async function createLauncher(root) {
     return;
   }
   const verbatim = (value) => '@"' + value.replaceAll('"', '""') + '"';
-  const source = `using System; using System.Diagnostics; using System.Threading.Tasks; using System.IO;
-public class FakeCodex {
- public static async Task Relay(Stream source, Stream destination) {
-  var bytes=new byte[4096]; int count;
-  while((count=await source.ReadAsync(bytes,0,bytes.Length))>0) { await destination.WriteAsync(bytes,0,count); await destination.FlushAsync(); }
- }
- public static int Main(string[] args) {
- if(args.Length==1 && args[0]=="--version") { Console.WriteLine("codex-cli synthetic-native"); return 0; }
- if(args.Length!=2 || args[0]!="app-server" || args[1]!="--stdio") return 2;
- var info = new ProcessStartInfo(${verbatim(process.execPath)}, ((char)34).ToString() + ${verbatim(launcher)} + ((char)34).ToString() + " app-server --stdio");
- info.UseShellExecute=false; info.CreateNoWindow=true; info.RedirectStandardInput=true; info.RedirectStandardOutput=true; info.RedirectStandardError=true;
- using(var child=Process.Start(info)) {
-  var input=Relay(Console.OpenStandardInput(),child.StandardInput.BaseStream); input.ContinueWith(t=>child.StandardInput.Close());
-  var output=Relay(child.StandardOutput.BaseStream,Console.OpenStandardOutput()); var error=Relay(child.StandardError.BaseStream,Console.OpenStandardError());
-  child.WaitForExit(); Task.WaitAll(output,error); return child.ExitCode;
- } } }`;
+  const source = (
+    await readFile(
+      join(repository, "test", "fixtures", "fake-codex-launcher.cs"),
+      "utf8",
+    )
+  )
+    .replaceAll("@@NODE@@", verbatim(process.execPath))
+    .replaceAll("@@LAUNCHER@@", verbatim(launcher));
   const sourceFile = join(root, "launcher.cs");
   await writeFile(sourceFile, source);
   const ps = join(root, "compile-launcher.ps1");
@@ -205,6 +197,16 @@ async function requests(root, name) {
         .map(JSON.parse)
     : [];
 }
+function disposableRunner() {
+  return (
+    process.env.GITHUB_ACTIONS === "true" &&
+    process.env.RUNNER_ENVIRONMENT === "github-hosted"
+  );
+}
+async function checkpoint(root, report, reportFile) {
+  report.rootFiles = await recordTree(root);
+  await save(reportFile, report);
+}
 async function cleanup(report) {
   const result = {
     verified: false,
@@ -215,49 +217,101 @@ async function cleanup(report) {
   const root = await rootFor(report.nonce);
   try {
     assert.equal((await identity()).hash, report.identityHash);
-    if (report.ownsProductPaths && (await exists(paths.stateFile))) {
-      const state = JSON.parse(await readFile(paths.stateFile, "utf8"));
+    if (report.ownsProductPaths) {
+      result.filesAbsent = false;
+      let removedFiles = true;
       assert.ok(
-        state.plans.every((p) =>
-          p.creditId.startsWith(`synthetic-native-${report.nonce}-`),
-        ),
-        "never clean unrelated product plans",
+        disposableRunner(),
+        "shared or local environments cannot mutate product paths",
       );
-      for (const p of state.plans) {
+      result.nativeAbsent = false;
+      assert.ok(report.nativePlans.length > 0, "no recorded native ownership");
+      let absent = true;
+      for (const p of report.nativePlans) {
         await adapter.remove(p);
-        result.nativeAbsent &&= !(await adapter.inspect(p)).installed;
-        const inspection = adapter.preview(p, {
-          command: process.execPath,
-          arguments: [],
-          environment: {},
-          stateDirectory: paths.stateDirectory,
-          codexHome: root,
-          stdoutPath: join(root, "stdout"),
-          stderrPath: join(root, "stderr"),
-        });
-        for (const file of inspection.files)
-          result.filesAbsent &&= !(await exists(file.path));
+        absent &&= !(await adapter.inspect(p)).installed;
       }
-      result.nativeAbsent &&= (await inspectSchedulerEnvironment()).ready;
-    }
-    if (result.nativeAbsent && result.filesAbsent && report.ownsProductPaths) {
-      for (const directory of [
-        ...new Set([paths.logDirectory, paths.stateDirectory]),
-      ]) {
-        if (await exists(directory)) {
-          assert.equal(await realpath(directory), directory);
-          await rm(directory, { recursive: true, force: true });
+      result.nativeAbsent =
+        absent && (await inspectSchedulerEnvironment()).ready;
+      assert.ok(
+        await exists(paths.stateFile),
+        "missing state cannot prove ownership",
+      );
+      const state = JSON.parse(await readFile(paths.stateFile, "utf8"));
+      const plans = ownedPlans(
+        state,
+        Object.values(report.cases).map((c) => c.expectedTarget),
+      );
+      const allowed = [
+        { name: "state.json", kind: "file" },
+        { name: "runtime", kind: "directory" },
+      ];
+      const logFiles = [
+        { name: "events.jsonl", kind: "file" },
+        { name: "events.jsonl.1", kind: "file" },
+      ];
+      const installed = join(
+        root,
+        "install",
+        "node_modules",
+        "codex-reset-scheduler",
+        "dist",
+      );
+      for (const p of plans) {
+        assert.equal(p.runtimeSha256, report.package.installedDistSHA256);
+        const relative = "runtime/" + p.runtimeVersion + "-" + p.runtimeSha256;
+        assert.equal(
+          await hashDirectory(join(paths.stateDirectory, relative)),
+          report.package.installedDistSHA256,
+        );
+        allowed.push({ name: relative, kind: "directory" });
+        for (const f of await recordTree(installed))
+          allowed.push({ ...f, name: relative + "/" + f.name });
+        for (const suffix of ["stdout", "stderr"])
+          logFiles.push({
+            name: p.planId + "." + suffix + ".log",
+            kind: "file",
+          });
+      }
+      for (const name of ["events.jsonl", "events.jsonl.1"]) {
+        const file = join(paths.logDirectory, name);
+        if (await exists(file)) {
+          const selectors = new Set(plans.map((p) => p.creditSelector));
+          for (const line of (await readFile(file, "utf8"))
+            .split("\n")
+            .filter(Boolean))
+            assert.ok(
+              selectors.has(JSON.parse(line).planSelector),
+              "unrelated log preserved",
+            );
         }
       }
-      result.filesAbsent &&=
-        !(await exists(paths.stateDirectory)) &&
-        !(await exists(paths.logDirectory));
+      if (
+        paths.logDirectory.startsWith(
+          paths.stateDirectory + (process.platform === "win32" ? "\\" : "/"),
+        )
+      ) {
+        allowed.push({ name: "logs", kind: "directory" });
+        allowed.push(
+          ...logFiles.map((f) => ({ ...f, name: "logs/" + f.name })),
+        );
+      } else if (await exists(paths.logDirectory)) {
+        removedFiles &&= (
+          await removeRecordedTree(paths.logDirectory, logFiles)
+        ).verified;
+      }
+      if (result.nativeAbsent && removedFiles)
+        removedFiles &&= (
+          await removeRecordedTree(paths.stateDirectory, allowed)
+        ).verified;
+      result.filesAbsent = removedFiles;
     }
     if (result.nativeAbsent && result.filesAbsent && report.rootCreated) {
       assert.equal(await realpath(root), root);
-      await rm(root, { recursive: true, force: true });
+      result.rootRemoved = (
+        await removeRecordedTree(root, report.rootFiles)
+      ).verified;
     }
-    result.rootRemoved = !(await exists(root));
     result.verified =
       result.nativeAbsent && result.filesAbsent && result.rootRemoved;
   } catch (error) {
@@ -280,7 +334,10 @@ async function probe(reportFile) {
     codeHashes,
     identityHash: user.hash,
     rootCreated: false,
+    rootFiles: [],
+    runnerScope: "disposable-github-hosted-only",
     ownsProductPaths: false,
+    nativePlans: [],
     phase: "preflight",
     cases: {},
   };
@@ -294,6 +351,11 @@ async function probe(reportFile) {
     interrupted = true;
   });
   try {
+    if (!disposableRunner()) {
+      report.status = "unsupported";
+      report.reason = "disposable_github_hosted_runner_required";
+      return;
+    }
     report.readiness = await inspectSchedulerEnvironment();
     if (!user.ordinary || !report.readiness.ready) {
       report.status = "unsupported";
@@ -317,6 +379,7 @@ async function probe(reportFile) {
         cwd: repository,
       }).stdout,
     )[0];
+    await checkpoint(root, report, reportFile);
     const tar = join(root, packed.filename);
     report.package = {
       name: packed.name,
@@ -336,6 +399,7 @@ async function probe(reportFile) {
       join(root, "npm-cache"),
       tar,
     ]);
+    await checkpoint(root, report, reportFile);
     const installed = join(
       root,
       "install",
@@ -362,6 +426,34 @@ async function probe(reportFile) {
     const installedHash = await hashDirectory(join(installed, "dist"));
     report.package.installedDistSHA256 = installedHash;
     await createLauncher(root);
+    await checkpoint(root, report, reportFile);
+    const installedBin = join(
+      root,
+      "install",
+      "node_modules",
+      ".bin",
+      process.platform === "win32"
+        ? "codex-reset-scheduler.cmd"
+        : "codex-reset-scheduler",
+    );
+    const binEnv = { ...process.env, RESETRAIL_TEST_BIN: installedBin };
+    const binResult =
+      process.platform === "win32"
+        ? command(
+            join(
+              process.env.SystemRoot ?? "C:\\Windows",
+              "System32",
+              "cmd.exe",
+            ),
+            ["/d", "/s", "/c", '""%RESETRAIL_TEST_BIN%" version --json"'],
+            { env: binEnv },
+          )
+        : command(installedBin, ["version", "--json"]);
+    assert.equal(
+      JSON.parse(binResult.stdout).data.version,
+      report.package.version,
+    );
+    report.package.installedBinExecuted = true;
     const names = ["success", "cancel", "account-change", "target-change"];
     // Leave four minutes for all real CLI arm commands; launchd is minute-resolution.
     const firstAt = Math.ceil((Date.now() + 240000) / 60000) * 60;
@@ -392,7 +484,9 @@ async function probe(reportFile) {
         untouchedTarget: other,
       };
     }
+    await checkpoint(root, report, reportFile);
     assert.equal(cli(root, "success", ["doctor"]).data.ok, true);
+    await checkpoint(root, report, reportFile);
     assert.equal(cli(root, "success", ["status"]).data.initialized, false);
     const visible = cli(root, "success", ["resets", "--timezone", "UTC"]).data;
     assert.equal(visible.availableCount, 2);
@@ -425,6 +519,16 @@ async function probe(reportFile) {
       ]);
       assert.equal(r.data.plans.length, 1);
       const plan = r.data.plans[0];
+      report.nativePlans.push({
+        planId: plan.planId,
+        creditSelector: plan.selector,
+        expiresAt: Date.parse(plan.expiresAt) / 1000,
+        scheduler: {
+          platform: plan.scheduler,
+          artifactId: plan.planId,
+          triggerTimesUtc: plan.triggerTimes,
+        },
+      });
       report.cases[name] = {
         ...report.cases[name],
         planId: plan.planId,
@@ -441,7 +545,7 @@ async function probe(reportFile) {
       assert.equal(status.status, "armed");
       assert.equal(status.scheduler.installed, true);
       assert.equal(status.scheduler.enabled, true);
-      await save(reportFile, report);
+      await checkpoint(root, report, reportFile);
     }
     const cancelled = report.cases.cancel;
     assert.equal(
@@ -469,7 +573,7 @@ async function probe(reportFile) {
       assert.ok(Date.now() < firstAt * 1000);
     }
     report.phase = "wait-for-natural-product-timers";
-    await save(reportFile, report);
+    await checkpoint(root, report, reportFile);
     const deadline = (firstAt + 60) * 1000 + 20000;
     while (Date.now() < deadline) {
       if (interrupted) throw new Error("probe_interrupted");
