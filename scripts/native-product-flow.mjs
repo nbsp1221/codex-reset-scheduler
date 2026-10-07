@@ -446,7 +446,7 @@ async function probe(reportFile) {
               "cmd.exe",
             ),
             ["/d", "/s", "/c", '""%RESETRAIL_TEST_BIN%" version --json"'],
-            { env: binEnv },
+            { env: binEnv, windowsVerbatimArguments: true },
           )
         : command(installedBin, ["version", "--json"]);
     assert.equal(
