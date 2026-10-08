@@ -91,6 +91,13 @@ The current release workflow validates and uploads a tarball only.
 ownership, and approval are separate release decisions; this guide does not
 authorize registry login, staging, or publication.
 
+## Upgrading an existing installation
+
+Before using a new build with existing schedules, follow the
+[state lock migration and recovery guide](state-lock.md). Existing schedules
+keep their immutable previous runtimes; installing the CLI alone does not
+upgrade them.
+
 ## Runtime and device requirements
 
 codex-reset-scheduler needs a current Codex CLI and detailed banked reset rows
