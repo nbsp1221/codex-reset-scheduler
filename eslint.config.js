@@ -30,4 +30,12 @@ export default tseslint.config(
       "@typescript-eslint/no-floating-promises": "off",
     },
   },
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ["scripts/native-product-*.mjs"],
+    languageOptions: {
+      parserOptions: { project: false, projectService: false },
+      globals: { process: "readonly", console: "readonly" },
+    },
+  },
 );
