@@ -10,7 +10,6 @@ import { promisify } from "node:util";
 
 import { inspectSchedulerEnvironment } from "../dist/application/doctor-service.js";
 import { resolveExecutable } from "../dist/platform/executables.js";
-import { creditSelector } from "../dist/domain/policy.js";
 import { managedPaths } from "../dist/persistence/paths.js";
 import { hashDirectory } from "../dist/runtime/installer.js";
 import { schedulerAdapter } from "../dist/scheduler/index.js";
@@ -21,12 +20,15 @@ import {
   removeRecordedTree,
 } from "./native-product-cleanup.mjs";
 
+// User actions use the installed bin. Internal imports serve only readiness,
+// safe cleanup and white-box runtime/state evidence; they are not CLI substitutes.
 // Only Codex is fake. Package, CLI, scheduler, snapshot, worker and state are real.
 const repository = fileURLToPath(new URL("../", import.meta.url));
 const digest = (data) => createHash("sha256").update(data).digest("hex");
 const sourceFiles = [
   "scripts/native-product-flow.mjs",
   "test/helpers/fake-app-server.ts",
+  "test/helpers/native-product-observation.ts",
   "scripts/native-product-cleanup.mjs",
   "test/fixtures/fake-codex-launcher.cs",
 ];
@@ -130,25 +132,32 @@ function cli(root, scenario, args) {
     CODEX_HOME: join(root, scenario),
     NPM_CONFIG_UPDATE_NOTIFIER: "false",
   };
-  const r = command(
-    process.execPath,
-    [
-      join(
-        root,
-        "install",
-        "node_modules",
-        "codex-reset-scheduler",
-        "dist",
-        "cli.js",
-      ),
-      ...args,
-      "--json",
-    ],
-    { env },
-  );
+  const r = installedCLI(root, [...args, "--json"], env);
   const response = JSON.parse(r.stdout);
   assert.equal(response.ok, true);
   return { data: response.data, pid: r.pid, exitedAt: r.exitedAt };
+}
+function installedCLI(root, args, env = process.env) {
+  const installedBin = join(
+    root,
+    "install",
+    "node_modules",
+    ".bin",
+    process.platform === "win32"
+      ? "codex-reset-scheduler.cmd"
+      : "codex-reset-scheduler",
+  );
+  if (process.platform !== "win32") return command(installedBin, args, { env });
+  // All product QA arguments are plain tokens; only the bin path needs cmd quoting.
+  assert.ok(args.every((arg) => /^[a-zA-Z0-9_.:-]+$/u.test(arg)));
+  return command(
+    join(process.env.SystemRoot ?? "C:\\Windows", "System32", "cmd.exe"),
+    ["/d", "/s", "/c", '""%RESETRAIL_TEST_BIN%" ' + args.join(" ") + '"'],
+    {
+      env: { ...env, RESETRAIL_TEST_BIN: installedBin },
+      windowsVerbatimArguments: true,
+    },
+  );
 }
 async function createLauncher(root) {
   const bin = join(root, "bin");
@@ -156,7 +165,7 @@ async function createLauncher(root) {
   const launcher = join(bin, "fake-codex.mjs");
   await writeFile(
     launcher,
-    `import { join } from "node:path";\nif (process.argv.slice(2).join(" ") === "--version") console.log("codex-cli synthetic-native");\nelse { if (process.argv.slice(2).join(" ") !== "app-server --stdio") throw new Error("Only fake app-server is allowed"); process.env.RESETRAIL_FAKE_STATE_FILE=join(process.env.CODEX_HOME,"resetrail-fake.json"); await import(${JSON.stringify(pathToFileURL(join(repository, ".test-dist", "test", "helpers", "fake-app-server.js")).href)}); }\n`,
+    `import { join } from "node:path";\nif (process.argv.slice(2).join(" ") === "--version") console.log("codex-cli synthetic-native");\nelse { if (process.argv.slice(2).join(" ") !== "app-server --stdio") throw new Error("Only fake app-server is allowed"); process.env.RESETRAIL_FAKE_STATE_FILE=join(process.env.CODEX_HOME,"resetrail-fake.json"); const { startFakeAppServer } = await import(${JSON.stringify(pathToFileURL(join(repository, ".test-dist", "test", "helpers", "fake-app-server.js")).href)}); const { observeConsumeAtRequest } = await import(${JSON.stringify(pathToFileURL(join(repository, ".test-dist", "test", "helpers", "native-product-observation.js")).href)}); startFakeAppServer(message => observeConsumeAtRequest(${JSON.stringify(paths.stateFile)}, message)); }\n`,
     { mode: 0o700 },
   );
   if (process.platform !== "win32") {
@@ -356,6 +365,17 @@ async function probe(reportFile) {
       report.reason = "disposable_github_hosted_runner_required";
       return;
     }
+    const { assertProductLogEvents } = await import(
+      pathToFileURL(
+        join(
+          repository,
+          ".test-dist",
+          "test",
+          "helpers",
+          "native-product-observation.js",
+        ),
+      ).href
+    );
     report.readiness = await inspectSchedulerEnvironment();
     if (!user.ordinary || !report.readiness.ready) {
       report.status = "unsupported";
@@ -427,28 +447,7 @@ async function probe(reportFile) {
     report.package.installedDistSHA256 = installedHash;
     await createLauncher(root);
     await checkpoint(root, report, reportFile);
-    const installedBin = join(
-      root,
-      "install",
-      "node_modules",
-      ".bin",
-      process.platform === "win32"
-        ? "codex-reset-scheduler.cmd"
-        : "codex-reset-scheduler",
-    );
-    const binEnv = { ...process.env, RESETRAIL_TEST_BIN: installedBin };
-    const binResult =
-      process.platform === "win32"
-        ? command(
-            join(
-              process.env.SystemRoot ?? "C:\\Windows",
-              "System32",
-              "cmd.exe",
-            ),
-            ["/d", "/s", "/c", '""%RESETRAIL_TEST_BIN%" version --json"'],
-            { env: binEnv, windowsVerbatimArguments: true },
-          )
-        : command(installedBin, ["version", "--json"]);
+    const binResult = installedCLI(root, ["version", "--json"]);
     assert.equal(
       JSON.parse(binResult.stdout).data.version,
       report.package.version,
@@ -461,11 +460,11 @@ async function probe(reportFile) {
       await mkdir(join(root, name), { mode: 0o700 });
       const id = `synthetic-native-${report.nonce}-${name}-target`;
       const other = `synthetic-native-${report.nonce}-${name}-other`;
-      const credit = (creditId) => ({
+      const credit = (creditId, grantedAt) => ({
         id: creditId,
         resetType: "codexRateLimits",
         status: "available",
-        grantedAt: firstAt - 10000,
+        grantedAt,
         expiresAt: firstAt + 120,
         title: "Synthetic native flow",
         description: "Fixture only",
@@ -474,12 +473,10 @@ async function probe(reportFile) {
         nonce: report.nonce,
         accountEmail: `synthetic-${name}@example.invalid`,
         requestLog: join(root, name, "requests.jsonl"),
-        productStateFile: paths.stateFile,
-        credits: [credit(id), credit(other)],
+        credits: [credit(id, firstAt - 10000), credit(other, firstAt - 9900)],
         results: {},
       });
       report.cases[name] = {
-        selector: creditSelector(id),
         expectedTarget: id,
         untouchedTarget: other,
       };
@@ -488,11 +485,16 @@ async function probe(reportFile) {
     assert.equal(cli(root, "success", ["doctor"]).data.ok, true);
     await checkpoint(root, report, reportFile);
     assert.equal(cli(root, "success", ["status"]).data.initialized, false);
-    const visible = cli(root, "success", ["resets", "--timezone", "UTC"]).data;
-    assert.equal(visible.availableCount, 2);
-    assert.ok(
-      visible.resets.some((r) => r.selector === report.cases.success.selector),
-    );
+    for (const name of names) {
+      const visible = cli(root, name, ["resets", "--timezone", "UTC"]).data;
+      assert.equal(visible.availableCount, 2);
+      assert.equal(visible.detailsComplete, true);
+      const targets = visible.resets.filter(
+        (r) => r.grantedAt === new Date((firstAt - 10000) * 1000).toISOString(),
+      );
+      assert.equal(targets.length, 1);
+      report.cases[name].selector = targets[0].selector;
+    }
     assert.equal(
       cli(root, "success", [
         "arm",
@@ -631,21 +633,13 @@ async function probe(reportFile) {
           creditId: c.expectedTarget,
           outcome: "reset",
         });
-        assert.deepEqual(
-          logs.map((e) => e.event),
-          ["plan-armed", "consume-result"],
-        );
-        assert.equal(logs[1].status, "succeeded");
-        assert.equal(logs[1].outcome, "reset");
+        assertProductLogEvents(logs, true);
         c.consumeEvidence = { ...m, id: undefined };
         c.resultUUIDRetained = true;
         c.exactTargetRetired = true;
       } else {
         assert.equal(consumes.length, 0);
-        assert.deepEqual(
-          logs.map((e) => e.event),
-          ["plan-armed"],
-        );
+        assertProductLogEvents(logs, false);
         assert.equal(
           status.status,
           name === "cancel"

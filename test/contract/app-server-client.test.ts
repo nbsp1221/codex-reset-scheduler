@@ -140,30 +140,15 @@ async function connectFake(
 test("file-backed fake credits retire and preserve UUID results across app-server processes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "resetrail-native-fixture-"));
   const stateFile = join(directory, "fake.json");
-  const productStateFile = join(directory, "product.json");
   const requestLog = join(directory, "requests.jsonl");
   const key = "00000000-0000-4000-8000-000000000002";
   const creditId = "synthetic-persistent-target";
-  await writeFile(
-    productStateFile,
-    JSON.stringify({
-      plans: [
-        {
-          planId: "synthetic-plan",
-          status: "attempting",
-          creditId,
-          attempt: { idempotencyKey: key },
-        },
-      ],
-    }),
-  );
   await writeFile(
     stateFile,
     JSON.stringify({
       nonce: "synthetic-nonce",
       accountEmail: "synthetic@example.invalid",
       requestLog,
-      productStateFile,
       credits: [
         {
           id: creditId,
@@ -213,14 +198,11 @@ test("file-backed fake credits retire and preserve UUID results across app-serve
           JSON.parse(line) as {
             method: string;
             pid: number;
-            persistedAttempt?: { idempotencyKey: string };
           },
       )
       .filter((m) => m.method === "account/rateLimitResetCredit/consume");
     assert.equal(new Set(consumed.map((m) => m.pid)).size, 2);
-    assert.ok(
-      consumed.every((m) => m.persistedAttempt?.idempotencyKey === key),
-    );
+    assert.equal(consumed.length, 2);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
