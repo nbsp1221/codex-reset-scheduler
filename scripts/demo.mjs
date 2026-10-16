@@ -85,7 +85,8 @@ if (process.argv.slice(2).join(" ") === "--version") {
   if (process.argv.slice(2).join(" ") !== "app-server --stdio") {
     throw new Error("Only synthetic app-server stdio is allowed.");
   }
-  await import(${JSON.stringify(pathToFileURL(fake).href)});
+  const { startFakeAppServer } = await import(${JSON.stringify(pathToFileURL(fake).href)});
+  startFakeAppServer();
 }
 `,
   );

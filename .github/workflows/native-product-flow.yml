@@ -1,0 +1,50 @@
+name: Installed product native flow
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-product-flow-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-product:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec tsc -p tsconfig.test.json
+      - name: Observe installed CLI and natural production worker execution
+        run:
+          node scripts/native-product-flow.mjs --report
+          native-product-report.json
+      - name: Recover owned probe artifacts
+        if: always()
+        run:
+          node scripts/native-product-flow.mjs --cleanup
+          native-product-report.json
+      - name: Upload execution and cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-product-${{ matrix.os }}
+          path: native-product-report.json
+          if-no-files-found: error
