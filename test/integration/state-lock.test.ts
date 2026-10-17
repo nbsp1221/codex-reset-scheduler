@@ -648,3 +648,83 @@ test("invalid legacy state cannot be treated as permission to publish a v2 fence
     await rm(f.home, { recursive: true, force: true });
   }
 });
+
+class PreflightStore extends StateStore {
+  beforeFirstLoad: (() => Promise<void>) | undefined;
+
+  override async load() {
+    const beforeLoad = this.beforeFirstLoad;
+    this.beforeFirstLoad = undefined;
+    await beforeLoad?.();
+    return super.load();
+  }
+}
+
+test("a concurrent first v2 writer can publish a fence and active plan during preflight", async () => {
+  const f = await fixture();
+  try {
+    await rm(f.paths.lockDirectory);
+    const contender = new PreflightStore(f.paths);
+    let publishedState: string | undefined;
+    contender.beforeFirstLoad = async () => {
+      // The contender has observed no fence. A second real store now publishes
+      // v2 and saves an active plan before the contender's preflight reads it.
+      await persistMigrationPlan(f, "armed");
+      publishedState = await readFile(f.paths.stateFile, "utf8");
+    };
+    let entered = false;
+    await contender.withLock((locked) => {
+      entered = true;
+      assert.equal(locked.get().plans[0]?.status, "armed");
+      return Promise.resolve();
+    });
+    assert.equal(entered, true);
+    assert.equal(await readFile(f.paths.stateFile, "utf8"), publishedState);
+    assert.equal(
+      await readFile(f.paths.lockDirectory, "utf8"),
+      "codex-reset-scheduler state lock v2\n",
+    );
+  } finally {
+    await rm(f.home, { recursive: true, force: true });
+  }
+});
+
+for (const kind of ["unknown", "legacy", "symlink"] as const) {
+  test(`preflight recheck rejects a concurrent ${kind} fence without changing state`, async () => {
+    const f = await fixture();
+    try {
+      await rm(f.paths.lockDirectory);
+      const contender = new PreflightStore(f.paths);
+      let publishedState: string | undefined;
+      let entriesBefore: string[] = [];
+      contender.beforeFirstLoad = async () => {
+        await persistMigrationPlan(f, "armed");
+        await rm(f.paths.lockDirectory);
+        if (kind === "unknown")
+          await writeFile(f.paths.lockDirectory, "unknown protocol\n");
+        else if (kind === "legacy") await mkdir(f.paths.lockDirectory);
+        else {
+          const target = join(f.home, "synthetic-protocol-target");
+          await mkdir(target);
+          await symlink(target, f.paths.lockDirectory, "junction");
+        }
+        publishedState = await readFile(f.paths.stateFile, "utf8");
+        entriesBefore = await readdir(f.paths.stateDirectory);
+      };
+      let entered = false;
+      await assert.rejects(
+        () =>
+          contender.withLock(() => {
+            entered = true;
+            return Promise.resolve();
+          }),
+        { code: "state_lock_recovery_required" },
+      );
+      assert.equal(entered, false);
+      assert.equal(await readFile(f.paths.stateFile, "utf8"), publishedState);
+      assert.deepEqual(await readdir(f.paths.stateDirectory), entriesBefore);
+    } finally {
+      await rm(f.home, { recursive: true, force: true });
+    }
+  });
+}

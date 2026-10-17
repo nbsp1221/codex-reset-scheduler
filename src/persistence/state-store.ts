@@ -153,6 +153,9 @@ async function ensureLockProtocol(
       ["armed", "attempting", "settling", "paused"].includes(plan.status),
     )
   ) {
+    // Another v2 writer may publish the fence and an active plan between our
+    // initial fence check and the state read. Validate that fence before refusal.
+    if (await hasLockProtocol(path)) return;
     throw new SafetyError(
       "Existing schedules must be disarmed with the previous version and old writers stopped before lock v2 migration. See docs/state-lock.md.",
       "state_lock_migration_required",
