@@ -252,14 +252,20 @@ export async function armResets(
       const state = locked.get();
       const activeIds = new Set(
         state.plans
-          .filter((plan) =>
-            ["armed", "attempting", "settling", "paused"].includes(plan.status),
+          .filter(
+            (plan) =>
+              // Retained attempts also reserve terminal/disarmed credit IDs.
+              // Only nothingToReset clears an attempt for a fresh UUID.
+              plan.attempt !== null ||
+              ["armed", "attempting", "settling", "paused"].includes(
+                plan.status,
+              ),
           )
           .map((plan) => plan.creditId),
       );
       if (plans.some((plan) => activeIds.has(plan.creditId))) {
         throw new SafetyError(
-          "A selected reset already has an active plan.",
+          "A selected reset already has an active plan or a retained attempt.",
           "already_armed",
         );
       }

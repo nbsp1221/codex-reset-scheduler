@@ -89,3 +89,38 @@ test("disarm refuses an ambiguous in-flight attempt", () => {
     /Cannot disarm/,
   );
 });
+
+test("an armed plan cannot overwrite a retained attempt UUID", () => {
+  const now = new Date("2026-01-01T00:01:00.000Z");
+  const pending = { ...beginAttempt(plan(), now), status: "armed" as const };
+  assert.throws(() => beginAttempt(pending, now), {
+    code: "invalid_transition",
+  });
+  assert.throws(() => disarmPlan(pending, now), { code: "attempt_in_flight" });
+});
+
+test("paused attempts remain ambiguous unless a known noCredit response was recorded", () => {
+  const now = new Date("2026-01-01T00:01:00.000Z");
+  const pending = { ...beginAttempt(plan(), now), status: "paused" as const };
+  for (const terminalReason of [
+    null,
+    "account_changed",
+    "runtime_hash_mismatch",
+    "scheduler_platform_mismatch",
+    "unknown_legacy_reason",
+  ]) {
+    assert.throws(() => disarmPlan({ ...pending, terminalReason }, now), {
+      code: "attempt_in_flight",
+    });
+  }
+  assert.equal(
+    disarmPlan(
+      {
+        ...pending,
+        terminalReason: "backend_no_credit_contradiction",
+      },
+      now,
+    ).status,
+    "disarmed",
+  );
+});
