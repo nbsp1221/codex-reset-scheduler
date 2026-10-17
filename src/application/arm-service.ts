@@ -233,48 +233,49 @@ export async function armResets(
     }
 
     const armedLive = live;
-    const initial = await dependencies.store.initialize();
-    const fingerprint = accountFingerprint(account, initial.accountSalt);
-    const runtime = await dependencies.installRuntime(dependencies.paths);
-    const plans = selected.map((credit) =>
-      makePlan({
-        credit,
-        accountFingerprint: fingerprint,
-        runtime,
-        live: armedLive,
-        now,
-        beforeSeconds: options.beforeSeconds,
-        dependencies,
-      }),
-    );
-
-    await dependencies.store.withLock(async (locked) => {
-      const state = locked.get();
-      const activeIds = new Set(
-        state.plans
-          .filter(
-            (plan) =>
-              // Retained attempts also reserve terminal/disarmed credit IDs.
-              // Only nothingToReset clears an attempt for a fresh UUID.
-              plan.attempt !== null ||
-              ["armed", "attempting", "settling", "paused"].includes(
-                plan.status,
-              ),
-          )
-          .map((plan) => plan.creditId),
-      );
-      if (plans.some((plan) => activeIds.has(plan.creditId))) {
-        throw new SafetyError(
-          "A selected reset already has an active plan or a retained attempt.",
-          "already_armed",
+    await dependencies.store.initialize();
+    // Publication and the first durable reference must share GC's lock.
+    const { runtime, plans } = await dependencies.store.withLock(
+      async (locked) => {
+        const state = locked.get();
+        const activeIds = new Set(
+          state.plans
+            .filter(
+              (plan) =>
+                plan.attempt !== null ||
+                ["armed", "attempting", "settling", "paused"].includes(
+                  plan.status,
+                ),
+            )
+            .map((plan) => plan.creditId),
         );
-      }
-      await locked.save({
-        ...state,
-        revision: state.revision + 1,
-        plans: [...state.plans, ...plans],
-      });
-    });
+        if (selected.some((credit) => activeIds.has(credit.id))) {
+          throw new SafetyError(
+            "A selected reset already has an active plan or a retained attempt.",
+            "already_armed",
+          );
+        }
+        const fingerprint = accountFingerprint(account, state.accountSalt);
+        const runtime = await dependencies.installRuntime(dependencies.paths);
+        const plans = selected.map((credit) =>
+          makePlan({
+            credit,
+            accountFingerprint: fingerprint,
+            runtime,
+            live: armedLive,
+            now,
+            beforeSeconds: options.beforeSeconds,
+            dependencies,
+          }),
+        );
+        await locked.save({
+          ...state,
+          revision: state.revision + 1,
+          plans: [...state.plans, ...plans],
+        });
+        return { runtime, plans };
+      },
+    );
 
     try {
       for (const plan of plans) {

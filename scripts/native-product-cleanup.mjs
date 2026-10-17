@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { lstat, readdir, readlink, unlink, rmdir } from "node:fs/promises";
+import {
+  lstat,
+  readdir,
+  readFile,
+  readlink,
+  unlink,
+  rmdir,
+} from "node:fs/promises";
 import { join } from "node:path";
 
 // A recorded path is not a claim to future files added beneath that directory.
@@ -49,6 +56,16 @@ export async function removeRecordedTree(root, records) {
     const known = allowed.get(r.name);
     if (!known || known.kind !== r.kind || known.target !== r.target)
       return { verified: false, reason: "unrecorded_content_preserved" };
+    if (known.contents !== undefined) {
+      const file = join(root, r.name);
+      const metadata = await lstat(file);
+      if (
+        !metadata.isFile() ||
+        metadata.isSymbolicLink() ||
+        (await readFile(file, "utf8")) !== known.contents
+      )
+        return { verified: false, reason: "unrecognized_content_preserved" };
+    }
   }
   // Never recursively remove a directory. A late-arriving file survives rmdir.
   for (const r of current.filter((r) => r.kind !== "directory"))
@@ -74,4 +91,19 @@ export async function removeRecordedTree(root, records) {
         error.code === "ENOTEMPTY" ? "late_content_preserved" : error.message,
     };
   }
+}
+
+// Only a fully stopped, owned test installation may lose the permanent fence.
+// Active, abandoned, or unknown .lock.v2 paths remain outside the allowlist.
+export async function removeOwnedStateTree(root, records, { nativeAbsent }) {
+  if (nativeAbsent !== true)
+    return { verified: false, reason: "native_tasks_not_absent" };
+  return removeRecordedTree(root, [
+    ...records,
+    {
+      name: ".lock",
+      kind: "file",
+      contents: "codex-reset-scheduler state lock v2\n",
+    },
+  ]);
 }
