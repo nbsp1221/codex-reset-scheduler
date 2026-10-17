@@ -136,7 +136,10 @@ node dist/cli.js status --plan <plan-id>
 ```
 
 Type `DISARM` when prompted, then verify `disarmed` in `status`. Cancellation
-does not undo a redemption. An ambiguous in-flight attempt cannot be disarmed.
+does not undo a redemption. An ambiguous in-flight attempt cannot be disarmed,
+including after an account, runtime, or platform safety pause. A retained
+attempt also prevents a new plan for the same exact credit ID. See the
+[safety model](docs/safety-model.md#state-machine) for paused-attempt limits.
 
 To check a scheduled run:
 

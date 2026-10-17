@@ -34,3 +34,6 @@ its failure cases are tested.
 codex-reset-scheduler is MIT licensed. Community projects may inform behavioral
 research, but do not copy third-party source into this repository without a
 deliberate license review and preserved attribution.
+
+The optional [native product QA](docs/native-product-qa.md) workflow documents
+when to run installed-package regression checks on disposable hosted runners.

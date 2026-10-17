@@ -26,3 +26,16 @@ test("runtime snapshot is a private content-addressed copy", async () => {
     await rm(home, { recursive: true, force: true });
   }
 });
+
+test("runtime hash changes when one source byte changes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "resetrail-runtime-hash-"));
+  try {
+    const file = join(directory, "cli.js");
+    await writeFile(file, "a");
+    const before = await hashDirectory(directory);
+    await writeFile(file, "b");
+    assert.notEqual(await hashDirectory(directory), before);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
