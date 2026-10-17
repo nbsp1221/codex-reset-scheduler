@@ -51,11 +51,15 @@ the transition. Before the first mutating command with v2:
 
 1. Use the previous executable's `status` and `logs` to review every plan.
    Resolve any in-flight or ambiguous attempt before proceeding; preserve its
-   persisted UUID and result evidence.
-2. Use that previous executable to disarm the existing plans. Check that native
-   registrations were removed, and wait until all old workers and mutating CLI
-   processes have exited. Do not run old and new writers concurrently during
-   this transition.
+   persisted UUID and result evidence. An unresolved retained attempt, including
+   one on a paused or previously disarmed plan, is not cleared by upgrading or
+   disarming. If reconciliation is unavailable, stop the migration and preserve
+   the installation; there is no supported command to discard that ambiguity.
+2. Only after attempts are resolved, use that previous executable to disarm
+   eligible existing plans. Never use an older version to bypass
+   `attempt_in_flight`. Check that native registrations were removed, and wait
+   until all old workers and mutating CLI processes have exited. Do not run old
+   and new writers concurrently during this transition.
 3. If a legacy `.lock` directory remains, inspect it only after confirming the
    previous processes and schedules have stopped. Move that directory aside for
    diagnosis. Do not remove `state.json`, runtime snapshots, or audit logs.

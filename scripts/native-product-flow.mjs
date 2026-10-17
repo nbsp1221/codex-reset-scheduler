@@ -18,6 +18,7 @@ import {
   ownedPlans,
   recordTree,
   removeRecordedTree,
+  removeOwnedStateTree,
 } from "./native-product-cleanup.mjs";
 
 // User actions use the installed bin. Internal imports serve only readiness,
@@ -311,7 +312,9 @@ async function cleanup(report) {
       }
       if (result.nativeAbsent && removedFiles)
         removedFiles &&= (
-          await removeRecordedTree(paths.stateDirectory, allowed)
+          await removeOwnedStateTree(paths.stateDirectory, allowed, {
+            nativeAbsent: result.nativeAbsent,
+          })
         ).verified;
       result.filesAbsent = removedFiles;
     }
