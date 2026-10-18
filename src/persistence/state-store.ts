@@ -205,12 +205,24 @@ async function acquireLock(path: string): Promise<string> {
     // lock. Prepared directories are private and never considered active.
     await writeFile(join(prepared, marker), "", { mode: 0o600, flag: "wx" });
     const started = Date.now();
+    let missingPermissionFailures = 0;
     while (Date.now() - started < LOCK_WAIT_MILLISECONDS) {
       try {
         await rename(prepared, path);
         return marker;
       } catch (error) {
-        if (!(await isLockCollision(error, path))) throw error;
+        const collision = await inspectLockCollision(error, path);
+        if (collision === "missing") {
+          // A Windows owner may release between rename and inspection. Retry
+          // only publication: absence is not permission to recover any owner.
+          missingPermissionFailures += 1;
+          if (missingPermissionFailures >= 5) throw error;
+          await new Promise((resolve) =>
+            setTimeout(resolve, 10 * missingPermissionFailures),
+          );
+          continue;
+        }
+        if (collision === null) throw error;
         if (await removeDeadLock(path)) continue;
         // The observed owner may release before the next probe. Retry within
         // the same budget instead of throwing the earlier collision error.
@@ -226,17 +238,22 @@ async function acquireLock(path: string): Promise<string> {
   }
 }
 
-async function isLockCollision(error: unknown, path: string): Promise<boolean> {
+async function inspectLockCollision(
+  error: unknown,
+  path: string,
+): Promise<"occupied" | "missing" | null> {
   const code = (error as NodeJS.ErrnoException).code;
-  if (code === "EEXIST" || code === "ENOTEMPTY") return true;
+  if (code === "EEXIST" || code === "ENOTEMPTY") return "occupied";
   // MoveFileEx can report EPERM for an existing directory on Windows. Do not
   // treat EPERM as contention unless that directory is actually observed.
-  if (process.platform !== "win32" || code !== "EPERM") return false;
+  if (process.platform !== "win32" || code !== "EPERM") return null;
   try {
     const metadata = await lstat(path);
-    return metadata.isDirectory() && !metadata.isSymbolicLink();
+    return metadata.isDirectory() && !metadata.isSymbolicLink()
+      ? "occupied"
+      : null;
   } catch (inspectionError) {
-    if (isNotFound(inspectionError)) return false;
+    if (isNotFound(inspectionError)) return "missing";
     throw inspectionError;
   }
 }
@@ -279,14 +296,29 @@ async function removeMarker(path: string, marker: string): Promise<boolean> {
 }
 
 async function removeEmptyLock(path: string): Promise<boolean> {
-  try {
-    await rmdir(path);
-    return true;
-  } catch (error) {
-    if (isNotFound(error)) return true;
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOTEMPTY" || code === "EEXIST") return false;
-    throw error;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rmdir(path);
+      return true;
+    } catch (error) {
+      if (isNotFound(error)) return true;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOTEMPTY" || code === "EEXIST") return false;
+      if (process.platform !== "win32" || code !== "EPERM") throw error;
+      // Concurrent Windows deletion can deny access while the old directory
+      // disappears. This is not evidence that any lock owner is dead.
+      try {
+        const metadata = await lstat(path);
+        if (!metadata.isDirectory() || metadata.isSymbolicLink())
+          throw lockRecoveryRequired();
+      } catch (inspectionError) {
+        if (isNotFound(inspectionError)) return true;
+        throw inspectionError;
+      }
+      if (attempt >= 4) throw error;
+      // Retrying only nonrecursive rmdir cannot remove a successor's marker.
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
   }
 }
 

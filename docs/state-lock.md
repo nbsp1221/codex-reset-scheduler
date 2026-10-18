@@ -71,7 +71,11 @@ Definite rename collisions are retried within the same five-second budget,
 including when the previous owner has already released the path. I/O and
 permission errors are propagated. Windows can report `EPERM` for an existing
 directory collision; it is considered contention only when that directory is
-actually observed. A missing path does not turn `EPERM` into a retry.
+actually observed. If inspection instead finds the path absent, publication
+alone is retried up to four times with 100 milliseconds of total backoff within
+the acquisition budget. This is not proof of contention or permission to recover
+an owner. Persistent `EPERM` is still propagated; unsafe paths and inspection
+errors are not retried through this absent-path allowance.
 
 An old worker that is triggered after v2 installation will stop with
 `state_locked`. Its scheduled runtime still uses the previous protocol. Finish
