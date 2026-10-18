@@ -279,14 +279,29 @@ async function removeMarker(path: string, marker: string): Promise<boolean> {
 }
 
 async function removeEmptyLock(path: string): Promise<boolean> {
-  try {
-    await rmdir(path);
-    return true;
-  } catch (error) {
-    if (isNotFound(error)) return true;
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOTEMPTY" || code === "EEXIST") return false;
-    throw error;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rmdir(path);
+      return true;
+    } catch (error) {
+      if (isNotFound(error)) return true;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOTEMPTY" || code === "EEXIST") return false;
+      if (process.platform !== "win32" || code !== "EPERM") throw error;
+      // Concurrent Windows deletion can deny access while the old directory
+      // disappears. This is not evidence that any lock owner is dead.
+      try {
+        const metadata = await lstat(path);
+        if (!metadata.isDirectory() || metadata.isSymbolicLink())
+          throw lockRecoveryRequired();
+      } catch (inspectionError) {
+        if (isNotFound(inspectionError)) return true;
+        throw inspectionError;
+      }
+      if (attempt >= 4) throw error;
+      // Retrying only nonrecursive rmdir cannot remove a successor's marker.
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
   }
 }
 
