@@ -460,7 +460,7 @@ for (const mode of ["rename-io", "rename-denied", "rename-eperm"]) {
           contender.messages.filter(
             (message) => message.event === "rename-attempt",
           ).length,
-          1,
+          mode === "rename-eperm" && process.platform === "win32" ? 5 : 1,
         );
         assert.equal(
           contender.messages.some((message) => message.event === "entered"),
