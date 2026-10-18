@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+  rm,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,6 +15,7 @@ import {
   ownedPlans,
   recordTree,
   removeRecordedTree,
+  removeOwnedStateTree,
 } from "./native-product-cleanup.mjs";
 
 test("cleanup preserves a foreign file arriving after owned paths were recorded", async () => {
@@ -57,4 +66,117 @@ test("cleanup preserves an unrecorded empty directory", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+const lockProtocol = "codex-reset-scheduler state lock v2\n";
+const stateRecords = [{ name: "state.json", kind: "file" }];
+
+async function stateFixture(operation) {
+  const root = await mkdtemp(join(tmpdir(), "resetrail-cleanup-lock-"));
+  try {
+    await writeFile(join(root, "state.json"), "owned");
+    await operation(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("state cleanup removes the exact v2 sentinel only after native tasks are absent", async () => {
+  await stateFixture(async (root) => {
+    await writeFile(join(root, ".lock"), lockProtocol);
+    for (const nativeAbsent of [false, undefined]) {
+      assert.equal(
+        (await removeOwnedStateTree(root, stateRecords, { nativeAbsent }))
+          .verified,
+        false,
+      );
+      assert.equal(await readFile(join(root, ".lock"), "utf8"), lockProtocol);
+      assert.equal(await readFile(join(root, "state.json"), "utf8"), "owned");
+    }
+    assert.equal(
+      (await removeOwnedStateTree(root, stateRecords, { nativeAbsent: true }))
+        .verified,
+      true,
+    );
+    await assert.rejects(lstat(root), { code: "ENOENT" });
+  });
+});
+
+test("state cleanup preserves unknown or nearly matching lock protocol contents", async () => {
+  for (const contents of [
+    "unknown lock",
+    "",
+    lockProtocol.trimEnd(),
+    lockProtocol + "foreign content\n",
+  ]) {
+    await stateFixture(async (root) => {
+      await writeFile(join(root, ".lock"), contents);
+      assert.equal(
+        (await removeOwnedStateTree(root, stateRecords, { nativeAbsent: true }))
+          .verified,
+        false,
+      );
+      assert.equal(await readFile(join(root, ".lock"), "utf8"), contents);
+      assert.equal(await readFile(join(root, "state.json"), "utf8"), "owned");
+    });
+  }
+});
+
+test("state cleanup preserves a legacy lock directory and all owned state", async () => {
+  await stateFixture(async (root) => {
+    await mkdir(join(root, ".lock"));
+    await writeFile(join(root, ".lock", "owner.json"), "preserve");
+    assert.equal(
+      (await removeOwnedStateTree(root, stateRecords, { nativeAbsent: true }))
+        .verified,
+      false,
+    );
+    assert.equal(
+      await readFile(join(root, ".lock", "owner.json"), "utf8"),
+      "preserve",
+    );
+    assert.equal(await readFile(join(root, "state.json"), "utf8"), "owned");
+  });
+});
+
+test("state cleanup preserves a symlinked or junction protocol path", async () => {
+  const targetRoot = await mkdtemp(join(tmpdir(), "resetrail-cleanup-target-"));
+  try {
+    const target = join(targetRoot, "protocol");
+    await writeFile(target, lockProtocol);
+    await stateFixture(async (root) => {
+      await symlink(
+        process.platform === "win32" ? targetRoot : target,
+        join(root, ".lock"),
+        process.platform === "win32" ? "junction" : "file",
+      );
+      assert.equal(
+        (await removeOwnedStateTree(root, stateRecords, { nativeAbsent: true }))
+          .verified,
+        false,
+      );
+      assert.equal((await lstat(join(root, ".lock"))).isSymbolicLink(), true);
+      assert.equal(await readFile(target, "utf8"), lockProtocol);
+      assert.equal(await readFile(join(root, "state.json"), "utf8"), "owned");
+    });
+  } finally {
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
+test("state cleanup preserves an active v2 lock and its permanent sentinel", async () => {
+  await stateFixture(async (root) => {
+    await writeFile(join(root, ".lock"), lockProtocol);
+    await mkdir(join(root, ".lock.v2"));
+    const marker = `owner-v2.${process.pid}.00000000-0000-4000-8000-000000000001`;
+    await writeFile(join(root, ".lock.v2", marker), "");
+    assert.equal(
+      (await removeOwnedStateTree(root, stateRecords, { nativeAbsent: true }))
+        .verified,
+      false,
+    );
+    assert.equal(await readFile(join(root, ".lock.v2", marker), "utf8"), "");
+    assert.equal(await readFile(join(root, ".lock"), "utf8"), lockProtocol);
+    assert.equal(await readFile(join(root, "state.json"), "utf8"), "owned");
+  });
 });
