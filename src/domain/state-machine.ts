@@ -17,7 +17,7 @@ export function beginAttempt(
   idempotencyKey = randomUUID(),
 ): ResetPlan {
   if (plan.status === "attempting") return plan;
-  if (plan.status !== "armed") {
+  if (plan.status !== "armed" || plan.attempt !== null) {
     throw new SafetyError(
       `Cannot begin an attempt while plan is ${plan.status}.`,
       "invalid_transition",
@@ -103,7 +103,16 @@ export function expirePlan(plan: ResetPlan, now: Date): ResetPlan {
 }
 
 export function disarmPlan(plan: ResetPlan, now: Date): ResetPlan {
-  if (plan.status === "attempting") {
+  // A safety pause does not resolve an earlier transport failure. Older paused
+  // records do not identify their previous phase, so retain them conservatively.
+  // The noCredit contradiction is a known response, not an ambiguous attempt.
+  if (
+    plan.status === "attempting" ||
+    (plan.attempt !== null &&
+      (plan.status === "armed" ||
+        (plan.status === "paused" &&
+          plan.terminalReason !== "backend_no_credit_contradiction")))
+  ) {
     throw new SafetyError(
       "Cannot disarm an attempt whose result may be ambiguous.",
       "attempt_in_flight",

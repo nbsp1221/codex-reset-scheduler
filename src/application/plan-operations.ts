@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { SafetyError } from "../domain/errors.js";
 import { disarmPlan } from "../domain/state-machine.js";
-import type { ResetPlan } from "../domain/types.js";
+import type { InstallState, ResetPlan } from "../domain/types.js";
 import { managedPaths, type ManagedPaths } from "../persistence/paths.js";
 import { StateStore } from "../persistence/state-store.js";
 import { decodeAuditEvent } from "../persistence/audit-log.js";
@@ -15,6 +15,7 @@ export type OperationsDependencies = Readonly<{
   store: StateStore;
   scheduler: SchedulerAdapter;
   now: () => Date;
+  removeRuntime?: (directory: string) => Promise<void>;
 }>;
 
 function defaults(): OperationsDependencies {
@@ -63,7 +64,10 @@ export async function disarmPlans(
   }
   const state = await dependencies.store.load();
   if (state === null)
-    throw new SafetyError("Resetrail is not initialized.", "not_initialized");
+    throw new SafetyError(
+      "codex-reset-scheduler is not initialized.",
+      "not_initialized",
+    );
   const targets = selectPlans(state.plans, options.plan, options.all);
   if (options.dryRun) {
     return { dryRun: true, plans: targets.map(sanitizedPlan) };
@@ -90,7 +94,7 @@ export async function readAuditLog(
       const state = await dependencies.store.load();
       if (state === null)
         throw new SafetyError(
-          "Resetrail is not initialized.",
+          "codex-reset-scheduler is not initialized.",
           "not_initialized",
         );
       planSelector = selectOne(state.plans, selector)[0]?.creditSelector;
@@ -147,6 +151,25 @@ export async function garbageCollect(
       ]);
     }
   }
+  // Native scheduler operations stay outside the state lock. Runtime cleanup
+  // must instead re-read references under the same lock as arm publication.
+  const removedRuntimes = dryRun
+    ? await collectRuntimes(state, true, dependencies)
+    : await dependencies.store.withLock((locked) =>
+        collectRuntimes(locked.get(), false, dependencies),
+      );
+  return {
+    dryRun,
+    removedSchedulers: terminal.map((plan) => plan.planId),
+    removedRuntimes,
+  };
+}
+
+async function collectRuntimes(
+  state: InstallState,
+  dryRun: boolean,
+  dependencies: OperationsDependencies,
+): Promise<readonly string[]> {
   const activeRuntimeNames = new Set(
     state.plans
       .filter((plan) =>
@@ -160,17 +183,13 @@ export async function garbageCollect(
   );
   if (!dryRun) {
     for (const runtime of removedRuntimes) {
-      await rm(join(dependencies.paths.runtimeDirectory, runtime), {
-        recursive: true,
-        force: true,
-      });
+      const directory = join(dependencies.paths.runtimeDirectory, runtime);
+      if (dependencies.removeRuntime)
+        await dependencies.removeRuntime(directory);
+      else await rm(directory, { recursive: true, force: true });
     }
   }
-  return {
-    dryRun,
-    removedSchedulers: terminal.map((plan) => plan.planId),
-    removedRuntimes,
-  };
+  return removedRuntimes;
 }
 
 async function unreferencedRuntimes(
