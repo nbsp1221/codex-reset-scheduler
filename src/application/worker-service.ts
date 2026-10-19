@@ -151,8 +151,7 @@ export async function runWorker(
         }
         return result(plan, "expired-noop");
       }
-      if (plan.status === "armed" && nowSeconds < plan.notBefore)
-        return result(plan, "too-early-noop");
+      if (nowSeconds < plan.notBefore) return result(plan, "too-early-noop");
 
       if (plan.status === "armed") {
         const snapshot = await client.readRateLimits();
@@ -191,10 +190,9 @@ export async function runWorker(
           });
           return result(plan, "expired-before-attempt");
         }
-        const attempting = recordAttemptSent(
-          beginAttempt(plan, attemptTime),
-          attemptTime,
-        );
+        if (Math.floor(attemptTime.getTime() / 1_000) < plan.notBefore)
+          return result(plan, "too-early-noop");
+        const attempting = beginAttempt(plan, attemptTime);
         plan = await savePlan(locked, state, plan, attempting);
         state = locked.get();
       }
@@ -202,7 +200,21 @@ export async function runWorker(
       const attempt = plan.attempt;
       if (plan.status !== "attempting" || attempt === null)
         return result(plan, "state-noop");
+      // Record each prepared delivery before IO, including retries of a retained
+      // UUID. A crash or the final time gate can still prevent the actual send.
+      const retryTime = dependencies.now();
+      if (Math.floor(retryTime.getTime() / 1_000) < plan.notBefore)
+        return result(plan, "too-early-noop");
+      plan = await savePlan(
+        locked,
+        state,
+        plan,
+        recordAttemptSent(plan, retryTime),
+      );
+      state = locked.get();
       const sendTime = dependencies.now();
+      if (Math.floor(sendTime.getTime() / 1_000) < plan.notBefore)
+        return result(plan, "too-early-noop");
       if (Math.floor(sendTime.getTime() / 1_000) >= plan.expiresAt) {
         const snapshot = await client.readRateLimits();
         const reconciled = reconcileAfterSnapshot(

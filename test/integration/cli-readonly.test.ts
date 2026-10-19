@@ -7,6 +7,7 @@ import {
   type ReadSession,
 } from "../../src/cli-core.js";
 import type { RateLimitsSnapshot } from "../../src/domain/types.js";
+import { StateStore } from "../../src/persistence/state-store.js";
 import { VERSION } from "../../src/version.js";
 
 const future = Math.floor(Date.now() / 1_000) + 3_600;
@@ -164,4 +165,33 @@ test("version and human errors use the new CLI name without account access", asy
   assert.equal(stdout.join(""), `codex-reset-scheduler ${VERSION}\n`);
   assert.equal(await runCli(["unknown-command"], isolated), 1);
   assert.match(stderr.join(""), /^codex-reset-scheduler: /u);
+});
+
+test("worker rejects dry-run before state access or backend connection", async (context) => {
+  const { dependencies, stderr } = harness();
+  const stateAccess = context.mock.method(
+    StateStore.prototype,
+    "withLock",
+    () => {
+      throw new Error("worker state must not be accessed");
+    },
+  );
+  const connect = context.mock.fn(() => {
+    throw new Error("backend must not connect");
+  });
+  const code = await runCli(
+    [
+      "__worker",
+      "--plan",
+      "00000000-0000-4000-8000-000000000001",
+      "--dry-run",
+      "--json",
+    ],
+    { ...dependencies, connect },
+  );
+  assert.equal(code, 1);
+  const result = JSON.parse(stderr.join("")) as { error: { code: string } };
+  assert.equal(result.error.code, "invalid_arguments");
+  assert.equal(stateAccess.mock.callCount(), 0);
+  assert.equal(connect.mock.callCount(), 0);
 });
