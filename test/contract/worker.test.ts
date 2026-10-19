@@ -53,6 +53,73 @@ test("worker consumes only the exact target and succeeds after authoritative ret
   }
 });
 
+test("incomplete snapshots neither authorize a missing target nor confirm retirement", async () => {
+  const capped = snapshot(false).resetCredits;
+  assert.ok(capped);
+  const summaries: RateLimitsSnapshot["resetCredits"][] = [
+    null,
+    { availableCount: 1, credits: null, detailsComplete: false },
+    { ...capped, availableCount: 2, detailsComplete: false },
+    { availableCount: 1, credits: [], detailsComplete: false },
+  ];
+  for (const summary of summaries) {
+    const harness = await createHarness();
+    const incomplete = { ...snapshot(false), resetCredits: summary };
+    let reads = 0;
+    let consumes = 0;
+    const client = fakeClient({
+      read: () => incomplete,
+      consume: (creditId) => {
+        assert.equal(creditId, harness.plan.creditId);
+        consumes += 1;
+        return Promise.resolve("reset");
+      },
+    });
+    try {
+      const dependencies = harness.dependencies(client);
+      const before = await runWorker(harness.plan.planId, dependencies);
+      assert.equal(before.event, "details-incomplete-noop");
+      assert.equal(before.status, "armed");
+      assert.equal(consumes, 0);
+
+      const sending = fakeClient({
+        read: () => (reads++ === 0 ? snapshot(true) : incomplete),
+        consume: client.consumeExactCredit,
+      });
+      assert.equal(
+        (await runWorker(harness.plan.planId, harness.dependencies(sending)))
+          .status,
+        "settling",
+      );
+      const key = (await harness.store.load())?.plans[0]?.attempt
+        ?.idempotencyKey;
+      assert.ok(key);
+      assert.equal(
+        (await runWorker(harness.plan.planId, dependencies)).status,
+        "settling",
+      );
+      assert.equal(consumes, 1);
+      assert.equal(
+        (await harness.store.load())?.plans[0]?.attempt?.idempotencyKey,
+        key,
+      );
+
+      const confirmed = fakeClient({
+        read: () => snapshot(false),
+        consume: client.consumeExactCredit,
+      });
+      assert.equal(
+        (await runWorker(harness.plan.planId, harness.dependencies(confirmed)))
+          .status,
+        "succeeded",
+      );
+      assert.equal(consumes, 1);
+    } finally {
+      await harness.cleanup();
+    }
+  }
+});
+
 test("ambiguous failure persists and retries the same UUID", async () => {
   const harness = await createHarness();
   const firstKeys: string[] = [];
