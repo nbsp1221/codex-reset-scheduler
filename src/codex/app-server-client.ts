@@ -113,17 +113,32 @@ export class AppServerClient {
     if (this.#closed) return;
     this.#closed = true;
     this.#child.stdin.end();
-    if (this.#child.exitCode !== null) return;
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.#child.kill("SIGTERM");
-        resolve();
-      }, 2_000);
-      this.#child.once("exit", () => {
-        clearTimeout(timeout);
-        resolve();
+    if (this.#child.exitCode === null && this.#child.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        // Keep graceful shutdown plus forced termination inside the existing
+        // two-second close budget used by the 45-second native worker limit.
+        let escalation: NodeJS.Timeout | undefined;
+        const timeout = setTimeout(() => {
+          this.#child.kill("SIGTERM");
+          escalation = setTimeout(() => this.#child.kill("SIGKILL"), 250);
+        }, 1_750);
+        const finished = () => {
+          clearTimeout(timeout);
+          clearTimeout(escalation);
+          this.#child.off("exit", finished);
+          this.#child.off("close", finished);
+          resolve();
+        };
+        this.#child.once("exit", finished);
+        // A spawn failure emits close without an exit event.
+        this.#child.once("close", finished);
       });
-    });
+    }
+    // Descendants may inherit the backend's pipe descriptors. Waiting for their
+    // EOF would let an unrelated process retain this worker after its child exits.
+    this.#child.stdin.destroy();
+    this.#child.stdout.destroy();
+    this.#child.stderr.destroy();
   }
 
   #handleLine(line: string): void {

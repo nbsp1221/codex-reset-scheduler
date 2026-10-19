@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -204,6 +205,105 @@ test("file-backed fake credits retire and preserve UUID results across app-serve
     assert.equal(new Set(consumed.map((m) => m.pid)).size, 2);
     assert.equal(consumed.length, 2);
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("close waits for a backend that ignores EOF and SIGTERM to be killed", async () => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "resetrail-stubborn-backend-"),
+  );
+  const pidFile = join(directory, "child.pid");
+  const fixture = join(directory, "fake.mjs");
+  await writeFile(
+    fixture,
+    `
+    import { writeFileSync } from 'node:fs';
+    import { createInterface } from 'node:readline';
+    writeFileSync(process.argv[2], String(process.pid));
+    process.on('SIGTERM', () => {});
+    setInterval(() => {}, 1000);
+    createInterface({ input: process.stdin }).on('line', line => {
+      const message = JSON.parse(line);
+      if (message.method === 'initialize')
+        process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + '\\n');
+    });
+  `,
+  );
+  let pid: number | undefined;
+  try {
+    const client = await AppServerClient.connect({
+      executable: process.execPath,
+      arguments: [fixture, pidFile],
+    });
+    pid = Number(await readFile(pidFile, "utf8"));
+    await client.close();
+    const childPid = pid;
+    assert.throws(() => process.kill(childPid, 0), { code: "ESRCH" });
+  } finally {
+    if (pid !== undefined) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* Already exited. */
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("close releases inherited pipes after its direct backend exits", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "resetrail-inherited-pipes-"));
+  const pidFile = join(directory, "descendant.pid");
+  const fixture = join(directory, "fake.mjs");
+  await writeFile(
+    fixture,
+    `
+    import { writeFileSync } from 'node:fs';
+    import { spawn } from 'node:child_process';
+    import { createInterface } from 'node:readline';
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: ['ignore', process.stdout, process.stderr]
+    });
+    writeFileSync(process.argv[2], String(child.pid));
+    createInterface({ input: process.stdin }).on('line', line => {
+      const message = JSON.parse(line);
+      if (message.method === 'initialize')
+        process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + '\\n');
+    });
+    process.stdin.on('end', () => process.exit(0));
+  `,
+  );
+  const moduleUrl = new URL(
+    "../../src/codex/app-server-client.js",
+    import.meta.url,
+  ).href;
+  try {
+    const completed = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import { AppServerClient } from ${JSON.stringify(moduleUrl)};
+        const client = await AppServerClient.connect({
+          executable: process.execPath,
+          arguments: ${JSON.stringify([fixture, pidFile])},
+        });
+        await client.close();
+        console.log('closed');`,
+      ],
+      { timeout: 4_000, encoding: "utf8" },
+    );
+    assert.equal(completed.error, undefined);
+    assert.equal(completed.status, 0, completed.stderr);
+    assert.equal(completed.stdout.trim(), "closed");
+    process.kill(Number(await readFile(pidFile, "utf8")), 0);
+  } finally {
+    try {
+      process.kill(Number(await readFile(pidFile, "utf8")), "SIGKILL");
+    } catch {
+      /* Already exited or never started. */
+    }
     await rm(directory, { recursive: true, force: true });
   }
 });

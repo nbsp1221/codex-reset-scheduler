@@ -34,14 +34,18 @@ export const runCommand: CommandRunner = async (
     child.stderr.on("data", (chunk: string) => {
       stderr = `${stderr}${chunk}`.slice(-8_000);
     });
-    const timeout = setTimeout(
-      () => child.kill("SIGTERM"),
-      options.timeoutMilliseconds ?? 30_000,
-    );
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
+    let timedOut = false;
+    let forceKill: NodeJS.Timeout | undefined;
+    const clearTimers = () => {
       clearTimeout(timeout);
-      const exitCode = signal === null ? (code ?? 1) : 1;
+      if (forceKill !== undefined) clearTimeout(forceKill);
+    };
+    let settled = false;
+    const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      const exitCode = !timedOut && signal === null ? (code ?? 1) : 1;
       const result = { stdout, stderr, exitCode };
       if (exitCode !== 0 && options.allowFailure !== true) {
         reject(
@@ -51,5 +55,23 @@ export const runCommand: CommandRunner = async (
           ),
         );
       } else resolve(result);
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      forceKill = setTimeout(() => {
+        child.kill("SIGKILL");
+        // Descendants can inherit these pipes after the direct child exits.
+        // Bound our wait without claiming ownership of arbitrary process trees.
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish(null, "SIGKILL");
+      }, 250);
+    }, options.timeoutMilliseconds ?? 30_000);
+    child.once("error", (error) => {
+      settled = true;
+      clearTimers();
+      reject(error);
     });
+    child.once("close", finish);
   });
