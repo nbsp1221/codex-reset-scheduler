@@ -188,6 +188,12 @@ export async function runCli(
         output("gc", await garbageCollect(dryRun), json, dependencies);
         return 0;
       case "__worker": {
+        if (dryRun) {
+          throw new SafetyError(
+            "The internal worker does not support --dry-run; no work was performed.",
+            "invalid_arguments",
+          );
+        }
         if (planSelector === undefined) {
           throw new SafetyError(
             "Internal worker requires an exact --plan ID.",

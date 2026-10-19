@@ -577,3 +577,120 @@ function snapshot(includeTarget: boolean): RateLimitsSnapshot {
     },
   };
 }
+
+test("retry after clock rollback must not consume before notBefore", async () => {
+  const harness = await createHarness();
+  let calls = 0;
+  const client = fakeClient({
+    read: () => snapshot(true),
+    consume: () => {
+      calls += 1;
+      return Promise.reject(new Error("synthetic transport loss"));
+    },
+  });
+  try {
+    const dependencies = harness.dependencies(client);
+    await assert.rejects(
+      runWorker(harness.plan.planId, dependencies),
+      /transport loss/,
+    );
+    const key = (await harness.store.load())?.plans[0]?.attempt?.idempotencyKey;
+    const earlier = new Date((harness.plan.notBefore - 1) * 1000);
+    await runWorker(harness.plan.planId, {
+      ...dependencies,
+      now: () => earlier,
+    });
+    assert.equal(
+      (await harness.store.load())?.plans[0]?.attempt?.idempotencyKey,
+      key,
+    );
+    assert.equal(calls, 1, "retry must wait for its persisted notBefore");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("clock rollback between snapshot and send must not consume early", async () => {
+  const harness = await createHarness();
+  let calls = 0;
+  const client = fakeClient({
+    read: () => snapshot(true),
+    consume: () => {
+      calls += 1;
+      return Promise.resolve("nothingToReset");
+    },
+  });
+  let clockReads = 0;
+  const earlier = new Date((harness.plan.notBefore - 1) * 1000);
+  try {
+    await runWorker(harness.plan.planId, {
+      ...harness.dependencies(client),
+      now: () => (clockReads++ === 0 ? now : earlier),
+    });
+    assert.equal(calls, 0, "send-time notBefore must remain authoritative");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("retries persist prepared-send count and lastTriedAt", async () => {
+  const harness = await createHarness();
+  const client = fakeClient({
+    read: () => snapshot(true),
+    consume: () => {
+      return Promise.reject(new Error("synthetic transport loss"));
+    },
+  });
+  try {
+    const dependencies = harness.dependencies(client);
+    await assert.rejects(
+      runWorker(harness.plan.planId, dependencies),
+      /transport loss/,
+    );
+    const later = new Date(now.getTime() + 60000);
+    await assert.rejects(
+      runWorker(harness.plan.planId, { ...dependencies, now: () => later }),
+      /transport loss/,
+    );
+    const attempt = (await harness.store.load())?.plans[0]?.attempt;
+    assert.equal(attempt?.tryCount, 2);
+    assert.equal(attempt.lastTriedAt, later.toISOString());
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("clock rollback after attempt persistence defers without losing the UUID", async () => {
+  const harness = await createHarness();
+  let calls = 0;
+  const keys: string[] = [];
+  const client = fakeClient({
+    read: () => snapshot(true),
+    consume: (_creditId, key) => {
+      calls += 1;
+      keys.push(key);
+      return Promise.reject(new Error("synthetic transport loss"));
+    },
+  });
+  let clockReads = 0;
+  const earlier = new Date((harness.plan.notBefore - 1) * 1000);
+  try {
+    const dependencies = harness.dependencies(client);
+    const result = await runWorker(harness.plan.planId, {
+      ...dependencies,
+      now: () => (clockReads++ < 3 ? now : earlier),
+    });
+    assert.equal(result.event, "too-early-noop");
+    assert.equal(calls, 0);
+    const key = (await harness.store.load())?.plans[0]?.attempt?.idempotencyKey;
+    assert.ok(key);
+    await assert.rejects(
+      runWorker(harness.plan.planId, dependencies),
+      /transport loss/,
+    );
+    assert.equal(calls, 1);
+    assert.equal(keys[0], key);
+  } finally {
+    await harness.cleanup();
+  }
+});

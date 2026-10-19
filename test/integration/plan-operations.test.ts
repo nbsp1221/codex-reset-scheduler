@@ -41,10 +41,11 @@ test("status and dry-run disarm are read-only and sanitized", async () => {
 test("disarm persists terminal state before removing the scheduler", async () => {
   const harness = await createHarness("armed");
   try {
-    await disarmPlans(
+    const result = (await disarmPlans(
       { plan: harness.plan.planId, all: false, dryRun: false },
       harness.dependencies,
-    );
+    )) as { plans: { status: string }[] };
+    assert.equal(result.plans[0]?.status, "disarmed");
     assert.equal((await harness.store.load())?.plans[0]?.status, "disarmed");
     assert.deepEqual(harness.removed, [harness.plan.planId]);
   } finally {

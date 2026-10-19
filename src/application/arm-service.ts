@@ -283,6 +283,24 @@ export async function armResets(
           plan,
           action(plan, runtime, dependencies),
         );
+        // Native registration runs outside the state lock. A concurrent disarm
+        // may have removed the artifact before registration finished. Recheck
+        // before declaring success; rollback removes any late registration. A
+        // worker may already have completed, which must not cancel other plans.
+        // Use an atomic snapshot: a worker can hold the write lock during IO.
+        // Disarm commits before removing artifacts, so any later disarm will
+        // remove this already-completed installation itself.
+        const installedState = await dependencies.store.load();
+        const stillRegistered = installedState?.plans.some(
+          (current) =>
+            current.planId === plan.planId && current.status !== "disarmed",
+        );
+        if (!stillRegistered) {
+          throw new SafetyError(
+            "Plan changed during scheduler installation.",
+            "plan_changed_during_install",
+          );
+        }
         await appendAuditEvent(dependencies.paths.auditLog, {
           timestamp: dependencies.now().toISOString(),
           event: "plan-armed",
@@ -404,6 +422,16 @@ function action(
     environment: {
       HOME: dependencies.home,
       CODEX_HOME: dependencies.codexHome,
+      // Native managers need not inherit the shell's XDG environment. Bind the
+      // worker to the exact managed locations selected when this plan was made.
+      ...(dependencies.paths.platform === "systemd"
+        ? {
+            XDG_STATE_HOME: dirname(dependencies.paths.stateDirectory),
+            XDG_CONFIG_HOME: dirname(
+              dirname(dependencies.paths.schedulerDirectory),
+            ),
+          }
+        : {}),
       PATH: minimalSchedulerPath(
         dependencies.nodeExecutable,
         plan.codexExecutable,
@@ -465,7 +493,7 @@ async function pausePlans(
       ...state,
       revision: state.revision + 1,
       plans: state.plans.map((plan) =>
-        ids.has(plan.planId)
+        ids.has(plan.planId) && plan.status === "armed"
           ? {
               ...plan,
               status: "paused",

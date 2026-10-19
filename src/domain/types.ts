@@ -51,6 +51,7 @@ export type PlanStatus =
 export type Attempt = Readonly<{
   idempotencyKey: string;
   startedAt: string;
+  // Prepared-send metadata is persisted before IO; it does not prove delivery.
   lastTriedAt: string | null;
   tryCount: number;
 }>;

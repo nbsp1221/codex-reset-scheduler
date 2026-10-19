@@ -73,15 +73,16 @@ export async function disarmPlans(
     return { dryRun: true, plans: targets.map(sanitizedPlan) };
   }
   const targetIds = new Set(targets.map((plan) => plan.planId));
-  await dependencies.store.withLock(async (locked) => {
+  const disarmed = await dependencies.store.withLock(async (locked) => {
     const current = locked.get();
     const plans = current.plans.map((plan) =>
       targetIds.has(plan.planId) ? disarmPlan(plan, dependencies.now()) : plan,
     );
     await locked.save({ ...current, revision: current.revision + 1, plans });
+    return plans.filter((plan) => targetIds.has(plan.planId));
   });
   for (const plan of targets) await dependencies.scheduler.remove(plan);
-  return { dryRun: false, plans: targets.map(sanitizedPlan) };
+  return { dryRun: false, plans: disarmed.map(sanitizedPlan) };
 }
 
 export async function readAuditLog(

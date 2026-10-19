@@ -146,3 +146,26 @@ test("Windows install writes Task Scheduler XML as UTF-16LE with a BOM", async (
 
   assert.ok(registeredXml);
 });
+
+// systemd.service(5): ':' disables ${VAR} and $VAR command-line substitution.
+test("systemd preserves literal dollars in worker paths without changing environment values", () => {
+  const scheduler = new SystemdScheduler(
+    managedPaths({ platform: "linux", home: "/home/test", environment: {} }),
+    run,
+  );
+  const literal = "/state/${SYNTHETIC_UNSET}/$HOME/100%/cli.js";
+  const preview = scheduler.preview(plan("systemd"), {
+    ...action,
+    arguments: [literal, "__worker", "--plan", "plan-a"],
+    environment: { HOME: "/home/${LITERAL}/$HOME/100%" },
+  });
+  const service = preview.files[0]?.content ?? "";
+  assert.ok(
+    service.includes(
+      'ExecStart=:"/runtime/node path/node" "/state/${SYNTHETIC_UNSET}/$HOME/100%%/cli.js"',
+    ),
+  );
+  assert.ok(
+    service.includes('Environment="HOME=/home/${LITERAL}/$HOME/100%%"'),
+  );
+});
