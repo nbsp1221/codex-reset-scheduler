@@ -69,7 +69,8 @@ test("command runner collects complete output and preserves ordinary failures", 
 test("timeout remains bounded when descendants inherit command output pipes", async () => {
   const started = Date.now();
   const descendant = "setTimeout(() => {}, 3000)";
-  const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: ['ignore', process.stdout, process.stderr] }); process.stdout.write('descendant-spawned'); process.exit(0);`;
+  // Windows needs a detached descendant to outlive its parent.
+  const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { detached: true, stdio: ['ignore', process.stdout, process.stderr] }); process.stdout.write('descendant-spawned'); process.exit(0);`;
   const result = await runCommand(process.execPath, ["-e", parent], {
     timeoutMilliseconds: 500,
     allowFailure: true,

@@ -263,6 +263,8 @@ test("close releases inherited pipes after its direct backend exits", async () =
     import { spawn } from 'node:child_process';
     import { createInterface } from 'node:readline';
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      // Windows needs a detached descendant to outlive its parent.
+      detached: true,
       stdio: ['ignore', process.stdout, process.stderr]
     });
     writeFileSync(process.argv[2], String(child.pid));
