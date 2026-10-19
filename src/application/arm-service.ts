@@ -283,6 +283,24 @@ export async function armResets(
           plan,
           action(plan, runtime, dependencies),
         );
+        // Native registration runs outside the state lock. A concurrent disarm
+        // may have removed the artifact before registration finished. Recheck
+        // before declaring success; rollback removes any late registration. A
+        // worker may already have completed, which must not cancel other plans.
+        // Use an atomic snapshot: a worker can hold the write lock during IO.
+        // Disarm commits before removing artifacts, so any later disarm will
+        // remove this already-completed installation itself.
+        const installedState = await dependencies.store.load();
+        const stillRegistered = installedState?.plans.some(
+          (current) =>
+            current.planId === plan.planId && current.status !== "disarmed",
+        );
+        if (!stillRegistered) {
+          throw new SafetyError(
+            "Plan changed during scheduler installation.",
+            "plan_changed_during_install",
+          );
+        }
         await appendAuditEvent(dependencies.paths.auditLog, {
           timestamp: dependencies.now().toISOString(),
           event: "plan-armed",
@@ -465,7 +483,7 @@ async function pausePlans(
       ...state,
       revision: state.revision + 1,
       plans: state.plans.map((plan) =>
-        ids.has(plan.planId)
+        ids.has(plan.planId) && plan.status === "armed"
           ? {
               ...plan,
               status: "paused",
