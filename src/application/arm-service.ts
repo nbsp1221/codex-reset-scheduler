@@ -422,6 +422,16 @@ function action(
     environment: {
       HOME: dependencies.home,
       CODEX_HOME: dependencies.codexHome,
+      // Native managers need not inherit the shell's XDG environment. Bind the
+      // worker to the exact managed locations selected when this plan was made.
+      ...(dependencies.paths.platform === "systemd"
+        ? {
+            XDG_STATE_HOME: dirname(dependencies.paths.stateDirectory),
+            XDG_CONFIG_HOME: dirname(
+              dirname(dependencies.paths.schedulerDirectory),
+            ),
+          }
+        : {}),
       PATH: minimalSchedulerPath(
         dependencies.nodeExecutable,
         plan.codexExecutable,

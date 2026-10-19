@@ -131,7 +131,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 ${environment}
-ExecStart=${command}
+ExecStart=:${command}
 TimeoutStartSec=45s
 NoNewPrivileges=true
 PrivateTmp=true
