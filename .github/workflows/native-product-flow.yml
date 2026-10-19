@@ -43,7 +43,7 @@ jobs:
           native-product-report.json
       - name: Upload execution and cleanup evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-product-${{ matrix.os }}
           path: native-product-report.json
