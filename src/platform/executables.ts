@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { access, realpath } from "node:fs/promises";
 import { delimiter, join } from "node:path";
-import { spawn } from "node:child_process";
+import { runCommand } from "./command-runner.js";
 
 import { SafetyError } from "../domain/errors.js";
 
@@ -47,28 +47,15 @@ function executableExtensions(): readonly string[] {
 }
 
 export async function executableVersion(executable: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, ["--version"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let stdout = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout = `${stdout}${chunk}`.slice(-1_000);
-    });
-    const timeout = setTimeout(() => child.kill("SIGTERM"), 10_000);
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      if (code !== 0)
-        reject(
-          new SafetyError(
-            "Executable version check failed.",
-            "version_check_failed",
-          ),
-        );
-      else resolve(stdout.trim());
-    });
+  const result = await runCommand(executable, ["--version"], {
+    timeoutMilliseconds: 10_000,
+    allowFailure: true,
   });
+  if (result.exitCode !== 0) {
+    throw new SafetyError(
+      "Executable version check failed.",
+      "version_check_failed",
+    );
+  }
+  return result.stdout.slice(-1_000).trim();
 }

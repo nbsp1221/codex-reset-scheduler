@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { runCommand as executeCommand } from "../platform/command-runner.js";
 
 export type DoctorCheck = Readonly<{
   name: string;
@@ -145,19 +145,12 @@ function schedulerName(platform: NodeJS.Platform): string {
   return "systemd";
 }
 
-function runCommand(
+async function runCommand(
   executable: string,
   arguments_: readonly string[],
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      executable,
-      [...arguments_],
-      { timeout: 5_000, windowsHide: true, encoding: "utf8" },
-      (error, stdout) => {
-        if (error !== null) reject(new Error(error.message, { cause: error }));
-        else resolve(stdout);
-      },
-    );
+  const result = await executeCommand(executable, arguments_, {
+    timeoutMilliseconds: 5_000,
   });
+  return result.stdout;
 }
