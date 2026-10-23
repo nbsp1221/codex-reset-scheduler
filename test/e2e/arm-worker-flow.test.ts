@@ -26,7 +26,7 @@ import type { ExecSpec, SchedulerAdapter } from "../../src/scheduler/types.js";
 test("arm through scheduled worker consumes only its bound synthetic credit", async () => {
   const home = await mkdtemp(join(tmpdir(), "resetrail-e2e-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const now = new Date("2026-01-01T00:00:00.000Z");
   const nowSeconds = Math.floor(now.getTime() / 1_000);
   const account: ChatgptAccount = {

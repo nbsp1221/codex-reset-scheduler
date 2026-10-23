@@ -19,7 +19,7 @@ import type {
 test("arm --all persists independent exact plans without a consume capability", async () => {
   const home = await mkdtemp(join(tmpdir(), "resetrail-arm-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const installed: string[] = [];
   const scheduler: SchedulerAdapter = {
     preview: (plan): SchedulerPreview => ({
@@ -104,7 +104,7 @@ test("arm --all persists independent exact plans without a consume capability", 
 test("scheduler failure removes every intended artifact and pauses every plan", async () => {
   const home = await mkdtemp(join(tmpdir(), "resetrail-arm-rollback-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const removed: string[] = [];
   let installs = 0;
   const scheduler: SchedulerAdapter = {

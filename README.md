@@ -158,6 +158,12 @@ node dist/cli.js logs --plan <plan-id>
 | `paused`                  | A safety gate requires attention; inspect `terminalReason`         |
 | `disarmed`                | The plan was cancelled                                             |
 
+An `armed` plan with no retained attempt is reported as `expired` at its UTC
+deadline, even when its last timer ran earlier. Reads do not write state or
+change native schedules; the next state-writing operation persists that
+transition under the state lock. Expiry never proves that a reset was consumed.
+Unresolved attempts and `settling` plans retain their reconciliation state.
+
 Logs record arming and worker events. Confirm cancellation with `status`; it
 does not currently add a separate disarm audit event. Incomplete credit details
 are never treated as proof of success.

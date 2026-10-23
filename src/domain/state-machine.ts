@@ -94,7 +94,12 @@ export function reconcileSettling(
 }
 
 export function expirePlan(plan: ResetPlan, now: Date): ResetPlan {
-  if (plan.status !== "armed") return plan;
+  if (
+    plan.status !== "armed" ||
+    plan.attempt !== null ||
+    Math.floor(now.getTime() / 1_000) < plan.expiresAt
+  )
+    return plan;
   return updated(
     plan,
     { status: "expired", terminalReason: "deadline_passed" },

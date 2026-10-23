@@ -162,7 +162,7 @@ for (const outcome of ["reset", "alreadyRedeemed", "noCredit"] as const) {
   }
 }
 
-test("expiry after ambiguity remains cancellable but retains the attempt identity", async () => {
+test("expiry after ambiguity remains unresolved and cannot discard the attempt identity", async () => {
   const harness = await createHarness();
   try {
     const id = await harness.arm();
@@ -173,10 +173,12 @@ test("expiry after ambiguity remains cancellable but retains the attempt identit
       undefined,
       new Date("2026-01-01T00:05:00.000Z"),
     );
-    assert.equal(result.status, "expired");
-    await harness.disarm(id);
+    assert.equal(result.status, "attempting");
+    await assert.rejects(() => harness.disarm(id), {
+      code: "attempt_in_flight",
+    });
     assert.deepEqual((await harness.plan()).attempt, attempt);
-    assert.deepEqual(harness.removed, [id]);
+    assert.deepEqual(harness.removed, []);
     // Harness clock returns to before expiry to model a later stale snapshot.
     await assert.rejects(() => harness.arm(), { code: "already_armed" });
     assert.equal(harness.keys.length, 1);
@@ -188,7 +190,7 @@ test("expiry after ambiguity remains cancellable but retains the attempt identit
 async function createHarness() {
   const home = await mkdtemp(join(tmpdir(), "resetrail-unresolved-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const now = new Date("2026-01-01T00:00:00.000Z");
   const seconds = Math.floor(now.getTime() / 1_000);
   const account: ChatgptAccount = {

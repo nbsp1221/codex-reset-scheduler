@@ -46,7 +46,10 @@ test("GC waits for runtime publication and reloads the newly saved reference", a
   const published = deferred<RuntimeSnapshot>();
   const resume = deferred<undefined>();
   const requested = deferred<undefined>();
-  const collector = new ObservedStore(harness.dependencies.paths);
+  const collector = new ObservedStore(
+    harness.dependencies.paths,
+    harness.dependencies.now,
+  );
   collector.beforeLock = () => requested.resolve(undefined);
   const arming = armResets(options, {
     ...harness.dependencies,
@@ -126,7 +129,10 @@ test("GC owns the publication lock until deletion completes before rearming", as
       },
     });
     await removalStarted.promise;
-    const armer = new ObservedStore(harness.dependencies.paths);
+    const armer = new ObservedStore(
+      harness.dependencies.paths,
+      harness.dependencies.now,
+    );
     armer.beforeLock = () => requested.resolve(undefined);
     let installedWhileCollecting = false;
     arming = armResets(options, {
@@ -252,7 +258,10 @@ test("GC dry-run does not acquire a write lock or mutate initialized or missing 
       harness.source,
     );
     const stateBefore = await harness.dependencies.store.load();
-    const observer = new ObservedStore(harness.dependencies.paths);
+    const observer = new ObservedStore(
+      harness.dependencies.paths,
+      harness.dependencies.now,
+    );
     observer.beforeLock = () => {
       throw new Error("dry-run tried to lock");
     };
@@ -336,7 +345,7 @@ async function createHarness() {
   };
   const dependencies: ArmDependencies = {
     paths,
-    store: new StateStore(paths),
+    store: new StateStore(paths, () => now),
     scheduler,
     installRuntime: (target) => installRuntimeSnapshot(target, source),
     now: () => now,

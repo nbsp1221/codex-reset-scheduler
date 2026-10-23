@@ -265,7 +265,7 @@ async function createHarness() {
   };
   const dependencies: ArmDependencies = {
     paths,
-    store: new StateStore(paths),
+    store: new StateStore(paths, () => now),
     scheduler,
     installRuntime: (target) => installRuntimeSnapshot(target, source),
     now: () => now,

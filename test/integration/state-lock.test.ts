@@ -65,7 +65,7 @@ async function terminate(child: ChildProcess): Promise<void> {
 async function fixture() {
   const home = await mkdtemp(join(tmpdir(), "resetrail-lock-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => new Date("2026-01-01T00:00:00Z"));
   await store.initialize();
   return { home, paths, store, lockPath: `${paths.lockDirectory}.v2` };
 }
@@ -664,7 +664,10 @@ test("a concurrent first v2 writer can publish a fence and active plan during pr
   const f = await fixture();
   try {
     await rm(f.paths.lockDirectory);
-    const contender = new PreflightStore(f.paths);
+    const contender = new PreflightStore(
+      f.paths,
+      () => new Date("2026-01-01T00:00:00Z"),
+    );
     let publishedState: string | undefined;
     contender.beforeFirstLoad = async () => {
       // The contender has observed no fence. A second real store now publishes
@@ -694,7 +697,10 @@ for (const kind of ["unknown", "legacy", "symlink"] as const) {
     const f = await fixture();
     try {
       await rm(f.paths.lockDirectory);
-      const contender = new PreflightStore(f.paths);
+      const contender = new PreflightStore(
+        f.paths,
+        () => new Date("2026-01-01T00:00:00Z"),
+      );
       let publishedState: string | undefined;
       let entriesBefore: string[] = [];
       contender.beforeFirstLoad = async () => {
