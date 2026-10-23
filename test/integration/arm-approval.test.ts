@@ -326,7 +326,7 @@ async function withFixture(
 async function makeFixture() {
   const home = await mkdtemp(join(tmpdir(), "resetrail-arm-approval-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const current = {
     credits: [approved] as readonly ResetCredit[],
     email: "synthetic@example.invalid",

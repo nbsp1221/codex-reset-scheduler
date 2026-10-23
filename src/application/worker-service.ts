@@ -12,6 +12,7 @@ import type {
 import {
   applyConsumeOutcome,
   beginAttempt,
+  expirePlan,
   recordAttemptSent,
   reconcileSettling,
 } from "../domain/state-machine.js";
@@ -77,6 +78,16 @@ export async function runWorker(
     ) {
       return result(plan, "terminal-noop");
     }
+    if (nowSeconds >= plan.expiresAt && plan.status !== "settling") {
+      const expired = expirePlan(plan, now);
+      if (expired !== plan) plan = await savePlan(locked, state, plan, expired);
+      return result(
+        plan,
+        plan.status === "expired"
+          ? "expired-noop"
+          : "expired-attempt-unresolved",
+      );
+    }
     if (plan.scheduler.platform !== dependencies.paths.platform) {
       plan = await savePlan(locked, state, plan, {
         ...plan,
@@ -120,37 +131,6 @@ export async function runWorker(
         return result(plan, "settling-reconciled");
       }
 
-      if (nowSeconds >= plan.expiresAt) {
-        if (plan.status === "attempting") {
-          const snapshot = await client.readRateLimits();
-          const reconciled = reconcileAfterSnapshot(
-            { ...plan, status: "settling" },
-            snapshot,
-            now,
-          );
-          plan = await savePlan(
-            locked,
-            state,
-            plan,
-            reconciled.status === "succeeded"
-              ? reconciled
-              : {
-                  ...plan,
-                  status: "expired",
-                  terminalReason: "deadline_passed",
-                  updatedAt: now.toISOString(),
-                },
-          );
-        } else {
-          plan = await savePlan(locked, state, plan, {
-            ...plan,
-            status: "expired",
-            terminalReason: "deadline_passed",
-            updatedAt: now.toISOString(),
-          });
-        }
-        return result(plan, "expired-noop");
-      }
       if (nowSeconds < plan.notBefore) return result(plan, "too-early-noop");
 
       if (plan.status === "armed") {
@@ -182,13 +162,15 @@ export async function runWorker(
         }
         const attemptTime = dependencies.now();
         if (Math.floor(attemptTime.getTime() / 1_000) >= plan.expiresAt) {
-          plan = await savePlan(locked, state, plan, {
-            ...plan,
-            status: "expired",
-            terminalReason: "deadline_passed",
-            updatedAt: attemptTime.toISOString(),
-          });
-          return result(plan, "expired-before-attempt");
+          const expired = expirePlan(plan, attemptTime);
+          if (expired !== plan)
+            plan = await savePlan(locked, state, plan, expired);
+          return result(
+            plan,
+            plan.status === "expired"
+              ? "expired-before-attempt"
+              : "expired-attempt-unresolved",
+          );
         }
         if (Math.floor(attemptTime.getTime() / 1_000) < plan.notBefore)
           return result(plan, "too-early-noop");
@@ -216,26 +198,7 @@ export async function runWorker(
       if (Math.floor(sendTime.getTime() / 1_000) < plan.notBefore)
         return result(plan, "too-early-noop");
       if (Math.floor(sendTime.getTime() / 1_000) >= plan.expiresAt) {
-        const snapshot = await client.readRateLimits();
-        const reconciled = reconcileAfterSnapshot(
-          { ...plan, status: "settling" },
-          snapshot,
-          sendTime,
-        );
-        plan = await savePlan(
-          locked,
-          state,
-          plan,
-          reconciled.status === "succeeded"
-            ? reconciled
-            : {
-                ...plan,
-                status: "expired",
-                terminalReason: "deadline_passed",
-                updatedAt: sendTime.toISOString(),
-              },
-        );
-        return result(plan, "expired-before-consume");
+        return result(plan, "expired-attempt-unresolved");
       }
       let outcome: ConsumeOutcome;
       try {
@@ -253,11 +216,24 @@ export async function runWorker(
         );
         throw error;
       }
-      const transitioned = applyConsumeOutcome(plan, outcome, now);
+      const completedAt = dependencies.now();
+      const transitioned = expirePlan(
+        applyConsumeOutcome(plan, outcome, completedAt),
+        completedAt,
+      );
       plan = await savePlan(locked, state, plan, transitioned);
       state = locked.get();
       const after = await client.readRateLimits();
-      plan = await reconcileOutcome(locked, state, plan, outcome, after, now);
+      if (plan.status !== "expired") {
+        plan = await reconcileOutcome(
+          locked,
+          state,
+          plan,
+          outcome,
+          after,
+          dependencies.now(),
+        );
+      }
       await audit(dependencies, plan, "consume-result", outcome);
       return result(plan, "consume-result");
     } finally {

@@ -16,6 +16,7 @@ import {
 import { dirname, join } from "node:path";
 
 import { ProtocolError, SafetyError } from "../domain/errors.js";
+import { expirePlan } from "../domain/state-machine.js";
 import { decodeInstallState } from "../domain/state-schema.js";
 import type { InstallState } from "../domain/types.js";
 import type { ManagedPaths } from "./paths.js";
@@ -33,12 +34,21 @@ export type LockedState = Readonly<{
 
 export class StateStore {
   readonly #paths: ManagedPaths;
+  readonly #now: () => Date;
 
-  constructor(paths: ManagedPaths) {
+  constructor(paths: ManagedPaths, now: () => Date = () => new Date()) {
     this.#paths = paths;
+    this.#now = now;
   }
 
   async load(): Promise<InstallState | null> {
+    // Time-derived terminal state must not depend on another scheduler delivery.
+    // Reads project it; writers checkpoint it only while holding the lock.
+    const stored = await this.#loadPersisted();
+    return stored === null ? null : expireIdlePlans(stored, this.#now());
+  }
+
+  async #loadPersisted(): Promise<InstallState | null> {
     await rejectSymlinkIfPresent(this.#paths.stateFile, "state file");
     try {
       return decodeInstallState(
@@ -76,7 +86,7 @@ export class StateStore {
     await ensureLockProtocol(this.#paths.lockDirectory, () => this.load());
     const marker = await acquireLock(lockPath);
     try {
-      const loaded = await this.load();
+      const loaded = await this.#loadPersisted();
       let current: InstallState;
       if (loaded === null) {
         if (!allowMissing)
@@ -91,7 +101,13 @@ export class StateStore {
           accountSalt: "",
           plans: [],
         };
-      } else current = loaded;
+      } else {
+        current = expireIdlePlans(loaded, this.#now());
+        if (current !== loaded) {
+          current = { ...current, revision: loaded.revision + 1 };
+          await atomicWriteJson(this.#paths.stateFile, current);
+        }
+      }
       const locked: LockedState = {
         get: () => current,
         save: async (state) => {
@@ -110,6 +126,13 @@ export class StateStore {
       await removeMarker(lockPath, marker);
     }
   }
+}
+
+function expireIdlePlans(state: InstallState, now: Date): InstallState {
+  const plans = state.plans.map((plan) => expirePlan(plan, now));
+  return plans.every((plan, index) => plan === state.plans[index])
+    ? state
+    : { ...state, plans };
 }
 
 async function ensurePrivateDirectory(path: string): Promise<void> {

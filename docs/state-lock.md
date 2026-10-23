@@ -39,11 +39,15 @@ synchronised state directories are unsupported.
 ## Upgrading an existing installation
 
 Installing a new CLI does not update the private runtimes in existing schedules.
-When the permanent v2 file is absent, existing `armed`, `attempting`,
+When the permanent v2 file is absent, existing live `armed`, `attempting`,
 `settling`, or `paused` plans return `state_lock_migration_required` before a
-protocol file is prepared or published. The command leaves state and native
-registrations unchanged and directs you to the previous executable. Already
-migrated v2 installations can continue using their own active plans.
+protocol file is prepared or published. Idle `armed` plans whose UTC deadline
+has passed are read as `expired`, using the same lifecycle as other state reads
+and writes. A retained attempt prevents that expiry transition. Reads leave the
+legacy files unchanged; a permitted writer persists expired plans after
+acquiring the v2 lock. A refused migration leaves state and native registrations
+unchanged and directs you to the previous executable. Already migrated v2
+installations can continue using their own active plans.
 
 This gate checks a snapshot of persisted plans; it cannot prove that all old
 writers have exited or prevent an old writer from changing that snapshot during
