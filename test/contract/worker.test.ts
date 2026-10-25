@@ -342,8 +342,9 @@ test("worker rechecks the deadline immediately before consume", async () => {
       ...base,
       now: () => times[Math.min(index++, times.length - 1)] ?? now,
     });
-    assert.equal(result.event, "expired-before-consume");
-    assert.equal(result.status, "expired");
+    assert.equal(result.event, "expired-attempt-unresolved");
+    assert.equal(result.status, "attempting");
+    assert.ok((await harness.store.load())?.plans[0]?.attempt?.idempotencyKey);
     assert.equal(consumes, 0);
   } finally {
     await harness.cleanup();
@@ -456,7 +457,7 @@ async function createHarness(): Promise<{
 }> {
   const home = await mkdtemp(join(tmpdir(), "resetrail-worker-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => now);
   const initial = await store.initialize();
   const plan: ResetPlan = {
     planId: "00000000-0000-4000-8000-000000000010",

@@ -188,7 +188,7 @@ async function createHarness(platform: NodeJS.Platform, custom: boolean) {
   const seconds = Math.floor(now.getTime() / 1_000);
   const dependencies: ArmDependencies = {
     paths,
-    store: new StateStore(paths),
+    store: new StateStore(paths, () => now),
     scheduler,
     installRuntime: () =>
       Promise.resolve({

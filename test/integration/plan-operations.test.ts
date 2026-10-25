@@ -142,7 +142,7 @@ async function createHarness(status: ResetPlan["status"]): Promise<{
 }> {
   const home = await mkdtemp(join(tmpdir(), "resetrail-operations-"));
   const paths = managedPaths({ platform: "linux", home, environment: {} });
-  const store = new StateStore(paths);
+  const store = new StateStore(paths, () => new Date("2026-01-01T00:01:00Z"));
   const initial = await store.initialize();
   const plan: ResetPlan = {
     planId: "00000000-0000-4000-8000-000000000020",
@@ -150,9 +150,9 @@ async function createHarness(status: ResetPlan["status"]): Promise<{
     creditId: "synthetic-private-credit",
     creditSelector: creditSelector("synthetic-private-credit"),
     resetType: "codexRateLimits",
-    grantedAt: 1_000,
-    expiresAt: 3_000,
-    notBefore: 2_000,
+    grantedAt: 1_767_225_600,
+    expiresAt: 1_767_228_600,
+    notBefore: 1_767_227_600,
     accountFingerprint: "b".repeat(64),
     runtimeVersion: "0.1.0",
     runtimeSha256: "c".repeat(64),

@@ -64,3 +64,11 @@ retirement.
 UTC epoch seconds in the private plan are authoritative. Native scheduler events
 are only delivery attempts. The worker refuses to consume before `notBefore` or
 at and after expiry.
+
+An idle `armed` plan expires when its UTC deadline is reached, independently of
+native timer delivery. Read-only state snapshots apply this domain transition
+without writing files; a writer persists it under the ordinary state lock. A
+retained attempt is never cleared or classified by this transition. After its
+deadline, an `attempting` worker returns without another consume or an inference
+from a now-missing credit; `settling` continues its existing confirmed-outcome
+reconciliation. No extra timer or background process is required.
