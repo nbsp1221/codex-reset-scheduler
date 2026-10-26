@@ -62,7 +62,9 @@ are not migrated or rescheduled. See
 ## Release status
 
 This is a release candidate; no public package registry release has been made.
-Codex `0.159.2` schema inspection and synthetic CLI validation are recorded in
+Release owners can follow the [release guide](docs/releasing.md) for version
+PRs, trusted-publisher setup and exact-package verification. Codex `0.159.2`
+schema inspection and synthetic CLI validation are recorded in
 [the current validation report](docs/validation/2026-10-03-release-preparation.md).
 They do not establish authenticated current-account compatibility. Linux and
 Windows native marker QA are historical observations; macOS real-device marker

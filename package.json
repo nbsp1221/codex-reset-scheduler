@@ -20,14 +20,16 @@
     "build:test": "pnpm clean && tsc -p tsconfig.test.json",
     "test": "pnpm build:test && node scripts/run-tests.mjs",
     "coverage": "pnpm build:test && node scripts/run-tests.mjs --coverage",
-    "lint": "eslint src test scripts/native-product-*.mjs",
+    "lint": "eslint src test scripts/native-product-*.mjs scripts/release*.mjs scripts/package-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:native-harness && pnpm build && pnpm pack:dry",
-    "prepack": "pnpm build",
-    "test:native-harness": "node --test scripts/native-product-cleanup.test.mjs"
+    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:native-harness && pnpm test:release && pnpm build && pnpm pack:dry",
+    "prepack": "node scripts/release-version.mjs && pnpm build",
+    "test:native-harness": "node --test scripts/native-product-cleanup.test.mjs",
+    "test:release": "node --test scripts/release.test.mjs",
+    "test:package": "node scripts/package-smoke.mjs"
   },
   "engines": {
     "node": ">=22.14.0"

@@ -37,3 +37,10 @@ deliberate license review and preserved attribution.
 
 The optional [native product QA](docs/native-product-qa.md) workflow documents
 when to run installed-package regression checks on disposable hosted runners.
+
+## Versions and releases
+
+Use an ordinary PR to update `package.json` and `src/version.ts` together.
+Follow the [release guide](docs/releasing.md) for exact-tag validation, OIDC
+publishing and installed-package verification. Publishing is a separate explicit
+release decision.
