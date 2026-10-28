@@ -32,10 +32,20 @@ export default tseslint.config(
   },
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ["scripts/native-product-*.mjs"],
+    files: [
+      "scripts/native-product-*.mjs",
+      "scripts/release*.mjs",
+      "scripts/package-smoke.mjs",
+    ],
     languageOptions: {
       parserOptions: { project: false, projectService: false },
-      globals: { process: "readonly", console: "readonly" },
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
+        Response: "readonly",
+      },
     },
   },
 );

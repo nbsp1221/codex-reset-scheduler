@@ -1,0 +1,71 @@
+name: Publish npm package
+
+# Publishing a GitHub Release is the approval point. A tag push does not publish.
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/release.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+      RELEASE_DIST_TAG: ${{ needs.verify.outputs.dist-tag }}
+      VERIFIED_SHA: ${{ needs.verify.outputs.sha }}
+      VERIFIED_INTEGRITY: ${{ needs.verify.outputs.integrity }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # Keep pnpm 10 for the project; use an explicitly supported OIDC publisher.
+      - run:
+          npm install --global npm@11.6.2 --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.verify.outputs.artifact-name }}
+          path: release-artifact
+      - name: Recheck immutable target and downloaded bytes
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          test "$(git rev-parse --verify "refs/tags/v$RELEASE_VERSION^{commit}")" = "$VERIFIED_SHA"
+          node scripts/release-version.mjs
+          test "$(node scripts/release-registry.mjs integrity release-artifact/package.tgz)" = "$VERIFIED_INTEGRITY"
+      - name: Refuse an already published version
+        run: node scripts/release-registry.mjs before
+      - name: Publish the verified tarball once using OIDC
+        id: publish
+        run:
+          npm publish ./release-artifact/package.tgz --ignore-scripts --access
+          public --provenance --tag "$RELEASE_DIST_TAG"
+      - name: Verify exact registry bytes and install the registry version
+        # A failed publish can have reached npm. Inspect it; never retry the write.
+        if:
+          ${{ !cancelled() && (steps.publish.outcome == 'success' ||
+          steps.publish.outcome == 'failure') }}
+        run:
+          node scripts/release-registry.mjs after release-artifact/package.tgz

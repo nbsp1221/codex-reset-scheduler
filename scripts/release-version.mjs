@@ -1,0 +1,138 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { appendFile, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath, URL } from "node:url";
+
+const root = fileURLToPath(new URL("../", import.meta.url));
+const identifier = "(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)";
+const versionPattern = new RegExp(
+  "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-" +
+    identifier +
+    "(?:\\." +
+    identifier +
+    ")*)?$",
+);
+
+export function coherentVersion(manifest, source) {
+  assert.equal(manifest.name, "codex-reset-scheduler");
+  assert.equal(typeof manifest.version, "string");
+  assert.match(
+    manifest.version,
+    versionPattern,
+    "Use a stable or prerelease SemVer without build metadata.",
+  );
+  const declared = source.trim().match(/^export const VERSION = "([^"]+)";$/u);
+  assert.equal(
+    declared?.[1],
+    manifest.version,
+    "package.json and src/version.ts must agree.",
+  );
+  return manifest.version;
+}
+
+export function releaseTarget(version, event) {
+  assert.equal(
+    event.action,
+    "published",
+    "Only a published GitHub Release can publish npm.",
+  );
+  assert.equal(event.release?.draft, false);
+  assert.equal(
+    event.release?.tag_name,
+    "v" + version,
+    "Release tag must exactly match the manifest.",
+  );
+  const prerelease = version.includes("-");
+  assert.equal(
+    event.release?.prerelease,
+    prerelease,
+    "GitHub prerelease flag must match SemVer.",
+  );
+  return {
+    version,
+    tag: "v" + version,
+    distTag: prerelease ? "next" : "latest",
+  };
+}
+
+export function requireVerifiedCI(runs, sha) {
+  // The API lists newest runs first. An older green run cannot mask a newer one.
+  const latest = runs.find(
+    (run) =>
+      run.head_sha === sha &&
+      run.head_branch === "main" &&
+      run.event === "push",
+  );
+  assert.equal(
+    latest?.status,
+    "completed",
+    "The exact main commit's latest CI must finish.",
+  );
+  assert.equal(
+    latest.conclusion,
+    "success",
+    "The exact main commit's latest CI must succeed.",
+  );
+}
+
+export async function readVersions() {
+  const manifest = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const source = await readFile(
+    new URL("../src/version.ts", import.meta.url),
+    "utf8",
+  );
+  return { manifest, version: coherentVersion(manifest, source) };
+}
+
+async function main() {
+  const { version } = await readVersions();
+  if (process.argv[2] !== "workflow") {
+    console.log("Version coherence verified: " + version);
+    return;
+  }
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const sha = git("rev-parse", "HEAD");
+  assert.equal(
+    sha,
+    process.env.GITHUB_SHA,
+    "Checkout must be pinned to the event SHA.",
+  );
+  let target = { version, distTag: version.includes("-") ? "next" : "latest" };
+  if (process.env.GITHUB_EVENT_NAME === "release") {
+    const event = JSON.parse(
+      await readFile(process.env.GITHUB_EVENT_PATH, "utf8"),
+    );
+    target = releaseTarget(version, event);
+    assert.equal(
+      git("rev-parse", "--verify", "refs/tags/" + target.tag + "^{commit}"),
+      sha,
+    );
+    git("merge-base", "--is-ancestor", sha, "origin/main");
+    const endpoint = `repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=100`;
+    const response = JSON.parse(
+      execFileSync("gh", ["api", endpoint], { encoding: "utf8" }),
+    );
+    requireVerifiedCI(response.workflow_runs, sha);
+  }
+  assert.ok(process.env.GITHUB_OUTPUT);
+  await appendFile(
+    process.env.GITHUB_OUTPUT,
+    "version=" +
+      version +
+      "\ndist-tag=" +
+      target.distTag +
+      "\nsha=" +
+      sha +
+      "\n",
+  );
+}
+
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  await main();
