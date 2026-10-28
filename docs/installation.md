@@ -86,11 +86,11 @@ codex-reset-scheduler doctor
 Use `codex-reset-scheduler` both for package-manager operations and to run the
 installed CLI.
 
-The release process uses a manual version PR and a published GitHub Release,
-then verifies, publishes and installs the exact npm version. Registry ownership
-and trusted-publisher setup require the package owner; see the
-[release guide](releasing.md). The manually runnable Release validation workflow
-only validates and uploads a tarball.
+The release process uses a manual version PR and a version-tag push, then
+verifies, publishes and installs the exact npm version before creating a GitHub
+Release with generated notes. Registry ownership and trusted-publisher setup
+require the package owner; see the [release guide](releasing.md). The manually
+runnable Release validation workflow only validates and uploads a tarball.
 
 ## Upgrading an existing installation
 

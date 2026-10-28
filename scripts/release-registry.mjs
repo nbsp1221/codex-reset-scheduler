@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -42,12 +43,40 @@ export async function registryVersion(name, version, fetcher = fetch) {
   return data.dist.integrity;
 }
 
-export function requireFirstAttempt(attempt) {
-  assert.equal(
-    attempt,
-    "1",
-    "A rerun must not retry a possibly accepted publish. Inspect the registry and original artifact first.",
+function jobsForAttempt(attempt) {
+  const { GITHUB_REPOSITORY: repository, GITHUB_RUN_ID: runId } = process.env;
+  assert.ok(repository, "Workflow repository is required.");
+  assert.match(runId ?? "", /^[1-9][0-9]*$/u, "Workflow run ID is required.");
+  const pages = JSON.parse(
+    execFileSync(
+      "gh",
+      [
+        "api",
+        `repos/${repository}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=100`,
+        "--paginate",
+        "--slurp",
+      ],
+      { encoding: "utf8" },
+    ),
   );
+  return pages.flatMap((page) => page.jobs);
+}
+
+export function requireSafePublishAttempt(attempt, loadJobs = jobsForAttempt) {
+  assert.match(attempt, /^[1-9][0-9]*$/u, "Invalid workflow attempt.");
+  const current = Number(attempt);
+  assert.ok(Number.isSafeInteger(current), "Invalid workflow attempt.");
+  for (let previous = 1; previous < current; previous += 1) {
+    const publishers = loadJobs(previous).filter(
+      (job) => job.name === "publish",
+    );
+    assert.ok(
+      publishers.length === 1 &&
+        publishers[0].status === "completed" &&
+        publishers[0].conclusion === "skipped",
+      "A prior publish job was not proven skipped. Inspect the registry and original artifact before retrying.",
+    );
+  }
 }
 
 export async function requireUnpublished(name, version, fetcher = fetch) {
@@ -89,7 +118,7 @@ async function main() {
   }
   const { manifest, version } = await readVersions();
   if (mode === "before") {
-    requireFirstAttempt(process.env.GITHUB_RUN_ATTEMPT ?? "1");
+    requireSafePublishAttempt(process.env.GITHUB_RUN_ATTEMPT ?? "1");
     await requireUnpublished(manifest.name, version);
   } else if (mode === "after") {
     const integrity = await packageIntegrity(file);
