@@ -14,12 +14,11 @@ import {
   verifyPublication,
 } from "./release-registry.mjs";
 
+import { ensureGitHubRelease } from "./release-github.mjs";
+
 const manifest = (version) => ({ name: "codex-reset-scheduler", version });
 const source = (version) => 'export const VERSION = "' + version + '";';
-const event = (tag, prerelease = false) => ({
-  action: "published",
-  release: { draft: false, tag_name: tag, prerelease },
-});
+const event = (tag, deleted = false) => ({ ref: "refs/tags/" + tag, deleted });
 
 test("the actual manifest and standalone runtime version agree", async () => {
   const actual = await readVersions();
@@ -40,28 +39,24 @@ test("release metadata rejects version drift and malformed versions", () => {
     assert.equal(coherentVersion(manifest(version), source(version)), version);
 });
 
-test("only exact published tags preserve stable and prerelease channels", () => {
+test("only exact live tag pushes preserve stable and prerelease channels", () => {
   assert.deepEqual(releaseTarget("0.1.0", event("v0.1.0")), {
     version: "0.1.0",
     tag: "v0.1.0",
     distTag: "latest",
   });
   assert.equal(
-    releaseTarget("0.2.0-rc.1", event("v0.2.0-rc.1", true)).distTag,
+    releaseTarget("0.2.0-rc.1", event("v0.2.0-rc.1")).distTag,
     "next",
   );
   for (const input of [
     event("v0.2.0"),
     event("0.1.0"),
     event("v0.1.0", true),
-    { ...event("v0.1.0"), action: "created" },
-    {
-      action: "published",
-      release: { draft: true, tag_name: "v0.1.0", prerelease: false },
-    },
+    { ref: "refs/heads/v0.1.0", deleted: false },
+    { action: "published", release: { tag_name: "v0.1.0", draft: false } },
   ])
     assert.throws(() => releaseTarget("0.1.0", input));
-  assert.throws(() => releaseTarget("0.2.0-rc.1", event("v0.2.0-rc.1")));
 });
 
 test("a green CI run must belong to the exact main commit", () => {
@@ -164,4 +159,65 @@ test("a workflow rerun cannot repeat an uncertain publication", () => {
   requireFirstAttempt("1");
   for (const attempt of ["2", "3", "", "unknown"])
     assert.throws(() => requireFirstAttempt(attempt), /possibly accepted/);
+});
+
+test("a missing Release is created once with generated notes and the right channel", async () => {
+  for (const version of ["0.1.0", "0.2.0-rc.1"]) {
+    const calls = [];
+    await ensureGitHubRelease(version, {
+      lookup: (tag) => {
+        assert.equal(tag, "v" + version);
+        return missing();
+      },
+      create: (args) => {
+        calls.push(args);
+        return Promise.resolve();
+      },
+    });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], [
+      "release",
+      "create",
+      "v" + version,
+      "--verify-tag",
+      "--title",
+      "v" + version,
+      "--generate-notes",
+      ...(version.includes("-") ? ["--prerelease"] : []),
+    ]);
+  }
+});
+
+test("a release-job rerun accepts the matching public Release without another write", async () => {
+  await ensureGitHubRelease("0.1.0", {
+    lookup: () =>
+      Promise.resolve(
+        Response.json({ tag_name: "v0.1.0", draft: false, prerelease: false }),
+      ),
+    create: () => {
+      throw new Error("Must not create a duplicate Release.");
+    },
+  });
+});
+
+test("Release lookup errors and mismatched existing metadata never authorize creation", async () => {
+  for (const response of [
+    new Response("", { status: 403 }),
+    new Response("", { status: 500 }),
+    Response.json({ tag_name: "v0.2.0", draft: false, prerelease: false }),
+    Response.json({ tag_name: "v0.1.0", draft: true, prerelease: false }),
+    Response.json({ tag_name: "v0.1.0", draft: false, prerelease: true }),
+  ]) {
+    let writes = 0;
+    await assert.rejects(
+      ensureGitHubRelease("0.1.0", {
+        lookup: () => Promise.resolve(response),
+        create: () => {
+          writes += 1;
+          return Promise.resolve();
+        },
+      }),
+    );
+    assert.equal(writes, 0);
+  }
 });

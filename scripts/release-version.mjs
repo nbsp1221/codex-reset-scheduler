@@ -32,27 +32,16 @@ export function coherentVersion(manifest, source) {
 }
 
 export function releaseTarget(version, event) {
+  assert.equal(event.deleted, false, "A deleted tag cannot publish npm.");
   assert.equal(
-    event.action,
-    "published",
-    "Only a published GitHub Release can publish npm.",
-  );
-  assert.equal(event.release?.draft, false);
-  assert.equal(
-    event.release?.tag_name,
-    "v" + version,
-    "Release tag must exactly match the manifest.",
-  );
-  const prerelease = version.includes("-");
-  assert.equal(
-    event.release?.prerelease,
-    prerelease,
-    "GitHub prerelease flag must match SemVer.",
+    event.ref,
+    "refs/tags/v" + version,
+    "Pushed tag must exactly match the manifest.",
   );
   return {
     version,
     tag: "v" + version,
-    distTag: prerelease ? "next" : "latest",
+    distTag: version.includes("-") ? "next" : "latest",
   };
 }
 
@@ -98,15 +87,20 @@ async function main() {
   const sha = git("rev-parse", "HEAD");
   assert.equal(
     sha,
-    process.env.GITHUB_SHA,
+    git("rev-parse", "--verify", process.env.GITHUB_SHA + "^{commit}"),
     "Checkout must be pinned to the event SHA.",
   );
   let target = { version, distTag: version.includes("-") ? "next" : "latest" };
-  if (process.env.GITHUB_EVENT_NAME === "release") {
+  if (process.env.GITHUB_EVENT_NAME === "push") {
     const event = JSON.parse(
       await readFile(process.env.GITHUB_EVENT_PATH, "utf8"),
     );
     target = releaseTarget(version, event);
+    assert.equal(
+      event.ref,
+      process.env.GITHUB_REF,
+      "Push payload and workflow ref must agree.",
+    );
     assert.equal(
       git("rev-parse", "--verify", "refs/tags/" + target.tag + "^{commit}"),
       sha,
@@ -117,7 +111,12 @@ async function main() {
       execFileSync("gh", ["api", endpoint], { encoding: "utf8" }),
     );
     requireVerifiedCI(response.workflow_runs, sha);
-  }
+  } else
+    assert.equal(
+      process.env.GITHUB_EVENT_NAME,
+      "workflow_dispatch",
+      "Unsupported release verification event.",
+    );
   assert.ok(process.env.GITHUB_OUTPUT);
   await appendFile(
     process.env.GITHUB_OUTPUT,
