@@ -71,11 +71,15 @@ only checks and uploads a tarball; it cannot publish.
 ## Interrupted or failed publication
 
 Do not blindly rerun a failed publish. npm may have accepted the request before
-the client failed. Inspect the exact version and the retained Actions tarball.
-Rerunning the npm publish job stops before another publication attempt, and a
-new run refuses an already visible version; lookup errors are not treated as
-absence. Registry visibility checks retry reads only. An uncertain publication
-requires investigation, not another tag push or a GitHub Release event.
+the client failed. Inspect the exact version and the retained Actions tarball. A
+rerun may proceed only when GitHub confirms that the `publish` job was completed
+with conclusion `skipped` in every earlier attempt of that run. This allows
+recovery from verification failures before publishing. Missing job history,
+lookup errors, and any prior publish job that ran or was cancelled stop the
+rerun. The job uses `actions: read` only to inspect this history. A new run also
+refuses an already visible version; registry errors are not treated as absence.
+Registry visibility checks retry reads only. An uncertain publication requires
+investigation, not another tag push or a GitHub Release event.
 
 To repeat only the registry installation check after inspecting the result,
 download that run's `codex-reset-scheduler-package-<attempt>` artifact and, from

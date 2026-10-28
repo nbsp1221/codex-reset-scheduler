@@ -9,7 +9,7 @@ import {
 } from "./release-version.mjs";
 import {
   registryVersion,
-  requireFirstAttempt,
+  requireSafePublishAttempt,
   requireUnpublished,
   verifyPublication,
 } from "./release-registry.mjs";
@@ -155,10 +155,73 @@ test("registry propagation retries reads, never a publication", async () => {
   );
 });
 
-test("a workflow rerun cannot repeat an uncertain publication", () => {
-  requireFirstAttempt("1");
-  for (const attempt of ["2", "3", "", "unknown"])
-    assert.throws(() => requireFirstAttempt(attempt), /possibly accepted/);
+const skippedPublisher = {
+  name: "publish",
+  status: "completed",
+  conclusion: "skipped",
+};
+
+test("a first attempt does not need history; verification-only failures can resume", () => {
+  requireSafePublishAttempt("1", () => {
+    throw new Error("First attempt must not query history.");
+  });
+  const inspected = [];
+  requireSafePublishAttempt("3", (attempt) => {
+    inspected.push(attempt);
+    return [
+      { name: "verify / verify", status: "completed", conclusion: "failure" },
+      skippedPublisher,
+    ];
+  });
+  assert.deepEqual(inspected, [1, 2]);
+});
+
+test("a rerun rejects attempted, ambiguous, or missing publication history", () => {
+  for (const jobs of [
+    [],
+    [skippedPublisher, skippedPublisher],
+    [{ ...skippedPublisher, name: "another-job" }],
+    [{ ...skippedPublisher, status: "in_progress" }],
+    ...["success", "failure", "cancelled", null].map((conclusion) => [
+      { ...skippedPublisher, conclusion },
+    ]),
+  ]) {
+    assert.throws(
+      () => requireSafePublishAttempt("2", () => jobs),
+      /proven skipped/,
+    );
+  }
+  // A skipped latest attempt cannot conceal an older actual publication.
+  assert.throws(
+    () =>
+      requireSafePublishAttempt("3", (attempt) => [
+        {
+          ...skippedPublisher,
+          conclusion: attempt === 1 ? "success" : "skipped",
+        },
+      ]),
+    /proven skipped/,
+  );
+  assert.throws(
+    () =>
+      requireSafePublishAttempt("2", () => {
+        throw new Error("GitHub API unavailable");
+      }),
+    /GitHub API unavailable/,
+  );
+  for (const attempt of [
+    "0",
+    "-1",
+    "",
+    "unknown",
+    "2x",
+    "1.5",
+    "9007199254740992",
+  ])
+    assert.throws(
+      () => requireSafePublishAttempt(attempt),
+      /Invalid workflow attempt/,
+    );
 });
 
 test("a missing Release is created once with generated notes and the right channel", async () => {
