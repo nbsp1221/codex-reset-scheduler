@@ -1,6 +1,6 @@
 {
   "name": "codex-reset-scheduler",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packageManager": "pnpm@10.33.4",
   "description": "Schedule automatic redemption of your existing Codex banked resets before they expire.",
   "type": "module",
