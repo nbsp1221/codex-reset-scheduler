@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFile, readFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
@@ -14,19 +14,13 @@ const versionPattern = new RegExp(
     ")*)?$",
 );
 
-export function coherentVersion(manifest, source) {
+export function packageVersion(manifest) {
   assert.equal(manifest.name, "codex-reset-scheduler");
   assert.equal(typeof manifest.version, "string");
   assert.match(
     manifest.version,
     versionPattern,
     "Use a stable or prerelease SemVer without build metadata.",
-  );
-  const declared = source.trim().match(/^export const VERSION = "([^"]+)";$/u);
-  assert.equal(
-    declared?.[1],
-    manifest.version,
-    "package.json and src/version.ts must agree.",
   );
   return manifest.version;
 }
@@ -65,21 +59,24 @@ export function requireVerifiedCI(runs, sha) {
   );
 }
 
-export async function readVersions() {
+export async function readVersion() {
   const manifest = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
   );
-  const source = await readFile(
-    new URL("../src/version.ts", import.meta.url),
-    "utf8",
-  );
-  return { manifest, version: coherentVersion(manifest, source) };
+  return { manifest, version: packageVersion(manifest) };
 }
 
 async function main() {
-  const { version } = await readVersions();
+  const { version } = await readVersion();
+  if (process.argv[2] === "generate") {
+    await writeFile(
+      new URL("../src/version.ts", import.meta.url),
+      `export const VERSION = ${JSON.stringify(version)};\n`,
+    );
+    return;
+  }
   if (process.argv[2] !== "workflow") {
-    console.log("Version coherence verified: " + version);
+    console.log("Package version verified: " + version);
     return;
   }
   const git = (...args) =>

@@ -61,14 +61,31 @@ are not migrated or rescheduled. See
 
 ## Release status
 
-This is a release candidate; no public package registry release has been made.
-Release owners can follow the [release guide](docs/releasing.md) for version
-PRs, trusted-publisher setup and exact-package verification. Codex `0.159.2`
-schema inspection and synthetic CLI validation are recorded in
+The package is publicly available on
+[npm](https://www.npmjs.com/package/codex-reset-scheduler). Version 0.1.0 was
+initially published manually. See the [installation guide](docs/installation.md)
+for npm installation and upgrade precautions. Release owners can follow the
+[release guide](docs/releasing.md) for version PRs, trusted-publisher setup and
+exact-package verification. Codex `0.159.2` schema inspection and synthetic CLI
+validation are recorded in
 [the current validation report](docs/validation/2026-10-03-release-preparation.md).
 They do not establish authenticated current-account compatibility. Linux and
 Windows native marker QA are historical observations; macOS real-device marker
 QA is still pending. See [platform support](docs/platform-support.md).
+
+## Install from npm
+
+With Node.js 22.14 or newer:
+
+```sh
+npm install --global codex-reset-scheduler
+codex-reset-scheduler version
+codex-reset-scheduler --help
+```
+
+Installing the CLI does not arm a plan or upgrade existing scheduled workers.
+Before upgrading an existing installation, read the
+[upgrade guidance](docs/installation.md#upgrading-an-existing-installation).
 
 ## Install from source
 

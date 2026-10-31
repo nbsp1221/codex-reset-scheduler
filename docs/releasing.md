@@ -6,11 +6,15 @@ notes are generated after npm publication and registry-install verification.
 
 ## One-time owner setup
 
-Before the first automated publication, the package owner must confirm npm
-account access and ownership of `codex-reset-scheduler`. A registry lookup does
-not reserve the name or prove ownership. If the package has never been
-published, complete its first publication separately with explicit approval and
-a reviewed tarball; trusted-publisher settings require an existing package. Do
+Version 0.1.0 was published manually from commit
+`461ecb4608581ea69c760a2684002251e0a69629`, without CI provenance. A later tag
+or GitHub Release does not add provenance to those existing npm bytes. Do not
+push `v0.1.0` to test this workflow: its already-published-version guard stops
+before OIDC publishing and GitHub Release creation.
+
+The next approved version must validate the complete automated path: OIDC
+publication, registry installation, provenance, and GitHub Release creation.
+Local package tests and validation-only CI do not establish OIDC publication. Do
 not add a token fallback to this workflow.
 
 In the npm package's **Settings → Trusted publishing**, configure GitHub
@@ -23,19 +27,22 @@ Actions:
 - Allowed actions: enable direct `npm publish`
 
 Create this configuration close to the intended release: npm expires an unused
-configuration after two days. No npm secret is needed in GitHub. The publish job
-uses GitHub-hosted Ubuntu, Node 24, pinned npm 11.6.2, and job-scoped
-`id-token: write`. The project continues to build with pnpm 10.33.4. See
-[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) and the
-[initial-publication limitation](https://github.com/npm/cli/issues/8544).
+configuration after two days if it has not completed its first successful
+publish. Once validated, that connection is exempt from this initial expiry.
+Recreate an expired connection near the next approved release rather than
+publishing an otherwise unnecessary version. No npm secret is needed in GitHub.
+The publish job uses GitHub-hosted Ubuntu, Node 24, pinned npm 11.6.2, and
+job-scoped `id-token: write`. The project continues to build with pnpm 10.33.4.
+See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
 ## Each version
 
-1. Open a version/release PR updating **both** `package.json` and
-   `src/version.ts`, with release notes in the PR. The constant stays
-   self-contained for immutable worker snapshots; checks reject drift from the
-   manifest. Use a canonical `MAJOR.MINOR.PATCH` or
-   `MAJOR.MINOR.PATCH-prerelease` version without build metadata.
+1. Open a version/release PR updating the version in `package.json`, with
+   release notes in the PR. Build, test and lint commands generate the ignored
+   `src/version.ts` from this single source. Compiled worker snapshots stay
+   self-contained without reading a package manifest at runtime. Use a canonical
+   `MAJOR.MINOR.PATCH` or `MAJOR.MINOR.PATCH-prerelease` version without build
+   metadata.
 2. Run `pnpm check` and `pnpm test:package`. Merge only after CI passes. Wait
    for the merged main commit's six OS/Node checks to succeed.
 3. After publication approval, create `v<version>` on that exact verified main
