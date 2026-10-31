@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { URL } from "node:url";
@@ -31,7 +39,9 @@ test("release metadata uses the actual manifest version", async () => {
 });
 
 test("build version generation follows manifest-only version changes", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "scheduler-version-"));
+  const temporary = await realpath(
+    await mkdtemp(join(tmpdir(), "scheduler-version-")),
+  );
   try {
     await mkdir(join(temporary, "scripts"));
     await mkdir(join(temporary, "src"));
