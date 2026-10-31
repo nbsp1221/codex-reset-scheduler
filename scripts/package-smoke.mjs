@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   access,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -12,7 +13,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-import { readVersions } from "./release-version.mjs";
+import { readVersion } from "./release-version.mjs";
 
 async function npmEntrypoint() {
   if (process.platform === "win32")
@@ -117,19 +118,32 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
         expectedIntegrity,
       );
     }
-    const bin = join(packageDirectory, installed.bin["codex-reset-scheduler"]);
-    const cli = (...args) =>
-      run(process.execPath, [bin, ...args], {
-        cwd: temporary,
-        env: environment,
-      });
-    const version = JSON.parse(cli("version", "--json"));
-    assert.equal(version.ok, true);
-    assert.equal(version.data.version, expectedVersion);
-    assert.match(cli("--help"), /codex-reset-scheduler/u);
-    const status = JSON.parse(cli("status", "--json"));
-    assert.equal(status.ok, true);
-    assert.deepEqual(status.data, { initialized: false, plans: [] });
+    const standalone = join(temporary, "standalone");
+    const runtime = join(standalone, "runtime");
+    await mkdir(standalone);
+    await cp(join(packageDirectory, "dist"), runtime, { recursive: true });
+    await assert.rejects(access(join(standalone, "package.json")), {
+      code: "ENOENT",
+    });
+    for (const bin of [
+      join(packageDirectory, installed.bin["codex-reset-scheduler"]),
+      join(runtime, "cli.js"),
+    ]) {
+      const cli = (...args) =>
+        run(process.execPath, [bin, ...args], {
+          cwd: temporary,
+          env: environment,
+        });
+      const version = JSON.parse(cli("version", "--json"));
+      assert.equal(version.ok, true);
+      assert.equal(version.data.version, expectedVersion);
+      assert.ok(
+        cli("--help").includes("codex-reset-scheduler " + expectedVersion),
+      );
+      const status = JSON.parse(cli("status", "--json"));
+      assert.equal(status.ok, true);
+      assert.deepEqual(status.data, { initialized: false, plans: [] });
+    }
     for (const state of [
       join(temporary, "state", "resetrail"),
       join(temporary, "local", "Resetrail"),
@@ -137,7 +151,7 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
     ])
       await assert.rejects(access(state), { code: "ENOENT" });
     console.log(
-      "Installed package smoke passed: codex-reset-scheduler@" +
+      "Installed package and dist-only runtime smoke passed: codex-reset-scheduler@" +
         expectedVersion,
     );
   } finally {
@@ -146,7 +160,7 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
 }
 
 async function main() {
-  const { version } = await readVersions();
+  const { version } = await readVersion();
   if (process.argv[2]) {
     await smokePackage(resolve(process.argv[2]), version);
     return;

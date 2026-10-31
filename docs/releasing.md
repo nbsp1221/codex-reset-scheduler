@@ -37,11 +37,12 @@ See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
 ## Each version
 
-1. Open a version/release PR updating **both** `package.json` and
-   `src/version.ts`, with release notes in the PR. The constant stays
-   self-contained for immutable worker snapshots; checks reject drift from the
-   manifest. Use a canonical `MAJOR.MINOR.PATCH` or
-   `MAJOR.MINOR.PATCH-prerelease` version without build metadata.
+1. Open a version/release PR updating the version in `package.json`, with
+   release notes in the PR. Build, test and lint commands generate the ignored
+   `src/version.ts` from this single source. Compiled worker snapshots stay
+   self-contained without reading a package manifest at runtime. Use a canonical
+   `MAJOR.MINOR.PATCH` or `MAJOR.MINOR.PATCH-prerelease` version without build
+   metadata.
 2. Run `pnpm check` and `pnpm test:package`. Merge only after CI passes. Wait
    for the merged main commit's six OS/Node checks to succeed.
 3. After publication approval, create `v<version>` on that exact verified main

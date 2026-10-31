@@ -7,7 +7,7 @@ import { setTimeout } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { smokePackage } from "./package-smoke.mjs";
-import { readVersions } from "./release-version.mjs";
+import { readVersion } from "./release-version.mjs";
 
 export async function packageIntegrity(file) {
   return (
@@ -116,7 +116,7 @@ async function main() {
     console.log(await packageIntegrity(file));
     return;
   }
-  const { manifest, version } = await readVersions();
+  const { manifest, version } = await readVersion();
   if (mode === "before") {
     requireSafePublishAttempt(process.env.GITHUB_RUN_ATTEMPT ?? "1");
     await requireUnpublished(manifest.name, version);

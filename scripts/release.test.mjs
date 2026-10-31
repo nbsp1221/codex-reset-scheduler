@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { URL } from "node:url";
 import test from "node:test";
 
 import {
-  coherentVersion,
-  readVersions,
+  packageVersion,
+  readVersion,
   releaseTarget,
   requireVerifiedCI,
 } from "./release-version.mjs";
@@ -20,13 +25,44 @@ const manifest = (version) => ({ name: "codex-reset-scheduler", version });
 const source = (version) => 'export const VERSION = "' + version + '";';
 const event = (tag, deleted = false) => ({ ref: "refs/tags/" + tag, deleted });
 
-test("the actual manifest and standalone runtime version agree", async () => {
-  const actual = await readVersions();
+test("release metadata uses the actual manifest version", async () => {
+  const actual = await readVersion();
   assert.equal(actual.version, actual.manifest.version);
 });
 
-test("release metadata rejects version drift and malformed versions", () => {
-  assert.throws(() => coherentVersion(manifest("0.2.0"), source("0.1.0")));
+test("build version generation follows manifest-only version changes", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "scheduler-version-"));
+  try {
+    await mkdir(join(temporary, "scripts"));
+    await mkdir(join(temporary, "src"));
+    await cp(
+      new URL("./release-version.mjs", import.meta.url),
+      join(temporary, "scripts", "release-version.mjs"),
+    );
+    for (const version of ["0.1.0", "0.2.0-rc.1"]) {
+      await writeFile(
+        join(temporary, "package.json"),
+        JSON.stringify(manifest(version)),
+      );
+      execFileSync(
+        process.execPath,
+        [join(temporary, "scripts", "release-version.mjs"), "generate"],
+        { cwd: temporary, stdio: "pipe" },
+      );
+      assert.equal(
+        await readFile(join(temporary, "src", "version.ts"), "utf8"),
+        source(version) + "\n",
+      );
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("release metadata rejects invalid package names and malformed versions", () => {
+  assert.throws(() =>
+    packageVersion({ name: "other-package", version: "0.1.0" }),
+  );
   for (const version of [
     "01.2.3",
     "1.2",
@@ -34,9 +70,9 @@ test("release metadata rejects version drift and malformed versions", () => {
     "1.2.3+build",
     "1.2.3\nsha=evil",
   ])
-    assert.throws(() => coherentVersion(manifest(version), source(version)));
+    assert.throws(() => packageVersion(manifest(version)));
   for (const version of ["0.1.0", "1.0.0-rc.1", "2.0.0-beta"])
-    assert.equal(coherentVersion(manifest(version), source(version)), version);
+    assert.equal(packageVersion(manifest(version)), version);
 });
 
 test("only exact live tag pushes preserve stable and prerelease channels", () => {

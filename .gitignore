@@ -7,3 +7,4 @@ coverage/
 Thumbs.db
 .env
 *.log
+src/version.ts

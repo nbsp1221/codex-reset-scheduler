@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readVersions } from "./release-version.mjs";
+import { readVersion } from "./release-version.mjs";
 
 export async function ensureGitHubRelease(version, { lookup, create }) {
   const tag = "v" + version;
@@ -43,7 +43,7 @@ export async function ensureGitHubRelease(version, { lookup, create }) {
 }
 
 async function main() {
-  const { version } = await readVersions();
+  const { version } = await readVersion();
   assert.ok(process.env.GH_TOKEN);
   assert.ok(process.env.GITHUB_REPOSITORY);
   await ensureGitHubRelease(version, {
