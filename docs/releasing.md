@@ -32,8 +32,9 @@ publish. Once validated, that connection is exempt from this initial expiry.
 Recreate an expired connection near the next approved release rather than
 publishing an otherwise unnecessary version. No npm secret is needed in GitHub.
 The publish job uses GitHub-hosted Ubuntu, Node 24, pinned npm 11.6.2, and
-job-scoped `id-token: write`. The project continues to build with pnpm 10.33.4.
-See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+job-scoped `id-token: write`. Build workflows read the pnpm version from
+`package.json`'s `packageManager` field. See
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
 ## Each version
 

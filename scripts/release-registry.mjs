@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -130,6 +129,6 @@ async function main() {
 
 if (
   process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  (await realpath(process.argv[1])) === fileURLToPath(import.meta.url)
 )
   await main();

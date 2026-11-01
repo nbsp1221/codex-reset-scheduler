@@ -5,7 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
-  realpath,
+  symlink,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -38,16 +38,20 @@ test("release metadata uses the actual manifest version", async () => {
   assert.equal(actual.version, actual.manifest.version);
 });
 
-test("build version generation follows manifest-only version changes", async () => {
-  const temporary = await realpath(
-    await mkdtemp(join(tmpdir(), "scheduler-version-")),
-  );
+test("build version generation follows manifest changes through a symlink", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "scheduler-version-"));
   try {
     await mkdir(join(temporary, "scripts"));
     await mkdir(join(temporary, "src"));
     await cp(
       new URL("./release-version.mjs", import.meta.url),
       join(temporary, "scripts", "release-version.mjs"),
+    );
+    const linkedScripts = join(temporary, "linked-scripts");
+    await symlink(
+      join(temporary, "scripts"),
+      linkedScripts,
+      process.platform === "win32" ? "junction" : "dir",
     );
     for (const version of ["0.1.0", "0.2.0-rc.1"]) {
       await writeFile(
@@ -56,7 +60,7 @@ test("build version generation follows manifest-only version changes", async () 
       );
       execFileSync(
         process.execPath,
-        [join(temporary, "scripts", "release-version.mjs"), "generate"],
+        [join(linkedScripts, "release-version.mjs"), "generate"],
         { cwd: temporary, stdio: "pipe" },
       );
       assert.equal(

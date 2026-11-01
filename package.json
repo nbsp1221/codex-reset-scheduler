@@ -26,7 +26,7 @@
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:native-harness && pnpm test:release && pnpm build && pnpm pack:dry",
-    "prepack": "node scripts/release-version.mjs && pnpm build",
+    "prepack": "pnpm build",
     "test:native-harness": "node --test scripts/native-product-cleanup.test.mjs",
     "test:release": "node --test scripts/release.test.mjs",
     "test:package": "node scripts/package-smoke.mjs"

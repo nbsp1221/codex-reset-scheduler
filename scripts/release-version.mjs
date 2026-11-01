@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { appendFile, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { appendFile, readFile, realpath, writeFile } from "node:fs/promises";
 import { fileURLToPath, URL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -129,6 +128,6 @@ async function main() {
 
 if (
   process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  (await realpath(process.argv[1])) === fileURLToPath(import.meta.url)
 )
   await main();
