@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 
+import { VERSION } from "../version.js";
+
 import { ProtocolError, SafetyError } from "../domain/errors.js";
 import type {
   ChatgptAccount,
@@ -62,7 +64,7 @@ export class AppServerClient {
     const client = new AppServerClient(launch);
     try {
       await client.#request("initialize", {
-        clientInfo: { name: "resetrail", version: "0.1.0" },
+        clientInfo: { name: "resetrail", version: VERSION },
         capabilities: { experimentalApi: true },
       });
       client.#notify("initialized", null);

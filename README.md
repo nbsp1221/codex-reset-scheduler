@@ -11,18 +11,15 @@ system invokes the worker inside the final window; no resident daemon is needed.
 
 ## Quick look
 
-No public npm release is available yet.
-[Build from source](#install-from-source) or
-[install a locally built tarball](docs/installation.md) first. From a built
-checkout:
+Install the [npm package](#install-from-npm), then:
 
 ```sh
-node dist/cli.js resets
-node dist/cli.js plan --credit <selector> --before 10m
-node dist/cli.js arm --credit <selector> --before 10m
-node dist/cli.js status
-node dist/cli.js disarm --plan <plan-id>
-node dist/cli.js logs --plan <plan-id>
+codex-reset-scheduler resets
+codex-reset-scheduler plan --credit <selector> --before 10m
+codex-reset-scheduler arm --credit <selector> --before 10m
+codex-reset-scheduler status
+codex-reset-scheduler disarm --plan <plan-id>
+codex-reset-scheduler logs --plan <plan-id>
 ```
 
 Copy the selector from `resets`, review the preview, and confirm
@@ -66,7 +63,7 @@ The package is publicly available on
 initially published manually. See the [installation guide](docs/installation.md)
 for npm installation and upgrade precautions. Release owners can follow the
 [release guide](docs/releasing.md) for version PRs, trusted-publisher setup and
-exact-package verification. Codex `0.159.2` schema inspection and synthetic CLI
+tag-triggered publication. Codex `0.159.2` schema inspection and synthetic CLI
 validation are recorded in
 [the current validation report](docs/validation/2026-10-03-release-preparation.md).
 They do not establish authenticated current-account compatibility. Linux and
@@ -104,10 +101,9 @@ pnpm build
 node dist/cli.js doctor
 ```
 
-The source checkout uses `node dist/cli.js` in the examples below. The package
-name is **codex-reset-scheduler** and its installed command is
-**codex-reset-scheduler**. [Installation details](docs/installation.md) include
-a local tarball option whose consumer needs Node.js and npm, without pnpm.
+The examples below use the installed command. In a source checkout, replace
+`codex-reset-scheduler` with `node dist/cli.js`. Building alone does not put the
+command on PATH. See [installation details](docs/installation.md) for tarballs.
 
 To try the full flow with fake data and no Codex account, see the
 [synthetic CLI demo](docs/synthetic-demo.md).
@@ -115,9 +111,9 @@ To try the full flow with fake data and no Codex account, see the
 ## Inspect and preview
 
 ```sh
-node dist/cli.js resets
-node dist/cli.js plan --credit <selector> --before 10m
-node dist/cli.js arm --credit <selector> --before 10m --dry-run
+codex-reset-scheduler resets
+codex-reset-scheduler plan --credit <selector> --before 10m
+codex-reset-scheduler arm --credit <selector> --before 10m --dry-run
 ```
 
 Copy the public selector from `resets`. Review the expiry and trigger times.
@@ -131,8 +127,8 @@ detail list permits selection only from the rows actually visible.
 ## Confirm and check the schedule
 
 ```sh
-node dist/cli.js arm --credit <selector> --before 10m
-node dist/cli.js status
+codex-reset-scheduler arm --credit <selector> --before 10m
+codex-reset-scheduler status
 ```
 
 The interactive command shows a fresh preview and asks for `ARM <selector>`.
@@ -149,9 +145,9 @@ authorization if they become visible later.
 To cancel a reviewed plan:
 
 ```sh
-node dist/cli.js disarm --plan <plan-id> --dry-run
-node dist/cli.js disarm --plan <plan-id>
-node dist/cli.js status --plan <plan-id>
+codex-reset-scheduler disarm --plan <plan-id> --dry-run
+codex-reset-scheduler disarm --plan <plan-id>
+codex-reset-scheduler status --plan <plan-id>
 ```
 
 Type `DISARM` when prompted, then verify `disarmed` in `status`. Cancellation
@@ -163,8 +159,8 @@ attempt also prevents a new plan for the same exact credit ID. See the
 To check a scheduled run:
 
 ```sh
-node dist/cli.js status --plan <plan-id>
-node dist/cli.js logs --plan <plan-id>
+codex-reset-scheduler status --plan <plan-id>
+codex-reset-scheduler logs --plan <plan-id>
 ```
 
 | Status                    | Meaning                                                            |
@@ -220,6 +216,7 @@ codex-reset-scheduler disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
 codex-reset-scheduler logs [--plan <id-or-selector>] [--json]
 codex-reset-scheduler gc [--dry-run] [--json]
 codex-reset-scheduler version [--json]
+codex-reset-scheduler --version
 ```
 
 For a reviewed non-interactive run, use `--yes` after reviewing

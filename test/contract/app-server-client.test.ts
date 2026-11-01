@@ -6,6 +6,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { VERSION } from "../../src/version.js";
+
 import { AppServerClient } from "../../src/codex/app-server-client.js";
 
 test("app-server client reads synthetic account and reset details", async () => {
@@ -37,6 +39,13 @@ test("consume gateway always sends the exact credit ID and caller UUID", async (
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as Record<string, unknown>);
+    assert.deepEqual(
+      messages.find((message) => message.method === "initialize")?.params,
+      {
+        clientInfo: { name: "resetrail", version: VERSION },
+        capabilities: { experimentalApi: true },
+      },
+    );
     const consume = messages.find(
       (message) => message.method === "account/rateLimitResetCredit/consume",
     );

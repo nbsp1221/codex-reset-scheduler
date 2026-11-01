@@ -72,6 +72,7 @@ export async function runCli(
       allowPositionals: true,
       strict: true,
       options: {
+        version: { type: "boolean", short: "v", default: false },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         timezone: { type: "string" },
@@ -87,7 +88,8 @@ export async function runCli(
     return reportError(error, false, dependencies);
   }
 
-  const command = parsed.positionals[0];
+  const command =
+    parsed.values.version === true ? "version" : parsed.positionals[0];
   const json = parsed.values.json === true;
   const timezone = stringOption(parsed.values.timezone);
   const selector = stringOption(parsed.values.credit);
@@ -276,7 +278,7 @@ async function doctor(
       accountType: account.type,
       accountPlan: account.planType,
       accountIdentityAvailable: account.email !== null,
-      resetDetailsAvailable: limits.resetCredits?.credits !== null,
+      resetDetailsAvailable: limits.resetCredits?.credits != null,
       resetDetailsComplete: limits.resetCredits?.detailsComplete ?? false,
       availableResetCount: limits.resetCredits?.availableCount ?? 0,
       scheduler,
@@ -302,7 +304,7 @@ async function resets(
     const data = {
       timezone: zone,
       availableCount: summary?.availableCount ?? 0,
-      detailsAvailable: summary?.credits !== null && summary !== null,
+      detailsAvailable: summary?.credits != null,
       detailsComplete: summary?.detailsComplete ?? false,
       resets: credits.map((credit) => ({
         selector: creditSelector(credit.id),
@@ -549,6 +551,7 @@ Usage:
   codex-reset-scheduler logs [--plan <id-or-selector>] [--json]
   codex-reset-scheduler gc [--dry-run] [--json]
   codex-reset-scheduler version [--json]
+  codex-reset-scheduler --version
 
 No command consumes a reset without an explicitly armed exact credit plan.
 `;

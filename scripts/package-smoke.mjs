@@ -13,8 +13,6 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-import { readVersion } from "./release-version.mjs";
-
 async function npmEntrypoint() {
   if (process.platform === "win32")
     return join(
@@ -46,7 +44,7 @@ function run(executable, args, options) {
   return result.stdout;
 }
 
-export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
+async function smokePackage(spec, expectedVersion) {
   const temporary = await mkdtemp(join(tmpdir(), "scheduler-package-"));
   try {
     const home = join(temporary, "home");
@@ -71,7 +69,6 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
       npm_config_globalconfig: join(temporary, "global.npmrc"),
       npm_config_cache: join(temporary, "cache"),
     };
-    const registry = expectedIntegrity !== undefined;
     const npmCLI = await npmEntrypoint();
     run(
       process.execPath,
@@ -83,7 +80,7 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
-        registry ? "--prefer-online" : "--offline",
+        "--offline",
         "--registry=https://registry.npmjs.org",
         spec,
       ],
@@ -109,15 +106,6 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
         "codex-reset-scheduler" + (process.platform === "win32" ? ".cmd" : ""),
       ),
     );
-    if (registry) {
-      const lock = JSON.parse(
-        await readFile(join(temporary, "package-lock.json"), "utf8"),
-      );
-      assert.equal(
-        lock.packages["node_modules/codex-reset-scheduler"].integrity,
-        expectedIntegrity,
-      );
-    }
     const standalone = join(temporary, "standalone");
     const runtime = join(standalone, "runtime");
     await mkdir(standalone);
@@ -160,7 +148,9 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
 }
 
 async function main() {
-  const { version } = await readVersion();
+  const { version } = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
   if (process.argv[2]) {
     await smokePackage(resolve(process.argv[2]), version);
     return;
@@ -187,9 +177,4 @@ async function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  (await realpath(process.argv[1])) ===
-    (await realpath(fileURLToPath(import.meta.url)))
-)
-  await main();
+await main();
