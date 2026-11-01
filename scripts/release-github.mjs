@@ -68,6 +68,7 @@ async function main() {
 
 if (
   process.argv[1] &&
-  (await realpath(process.argv[1])) === fileURLToPath(import.meta.url)
+  (await realpath(process.argv[1])) ===
+    (await realpath(fileURLToPath(import.meta.url)))
 )
   await main();
