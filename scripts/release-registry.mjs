@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { smokePackage } from "./package-smoke.mjs";
-import { readVersions } from "./release-version.mjs";
+import { readVersion } from "./release-version.mjs";
 
 export async function packageIntegrity(file) {
   return (
@@ -116,7 +115,7 @@ async function main() {
     console.log(await packageIntegrity(file));
     return;
   }
-  const { manifest, version } = await readVersions();
+  const { manifest, version } = await readVersion();
   if (mode === "before") {
     requireSafePublishAttempt(process.env.GITHUB_RUN_ATTEMPT ?? "1");
     await requireUnpublished(manifest.name, version);
@@ -130,6 +129,7 @@ async function main() {
 
 if (
   process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  (await realpath(process.argv[1])) ===
+    (await realpath(fileURLToPath(import.meta.url)))
 )
   await main();

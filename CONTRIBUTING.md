@@ -40,7 +40,8 @@ when to run installed-package regression checks on disposable hosted runners.
 
 ## Versions and releases
 
-Use an ordinary PR to update `package.json` and `src/version.ts` together.
-Follow the [release guide](docs/releasing.md) for exact-tag validation, OIDC
-publishing and installed-package verification. Publishing is a separate explicit
-release decision.
+Use an ordinary PR to update the version in `package.json`. Builds generate
+`src/version.ts` so immutable worker snapshots remain self-contained. Follow the
+[release guide](docs/releasing.md) for exact-tag validation, OIDC publishing and
+installed-package verification. Publishing is a separate explicit release
+decision.

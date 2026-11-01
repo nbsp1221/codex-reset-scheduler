@@ -1,9 +1,7 @@
 # Installation
 
-codex-reset-scheduler is a release candidate. The package name is
-`codex-reset-scheduler`; the installed executable is `codex-reset-scheduler`. A
-public registry release is not available yet. Package-name lookup results do not
-establish ownership or reserve a name.
+The public npm package and installed executable are both named
+`codex-reset-scheduler`. Version 0.1.0 was the first public release.
 
 The project was previously named Resetrail.
 
@@ -11,6 +9,25 @@ The current repository and default checkout directory are
 `nbsp1221/codex-reset-scheduler` and `codex-reset-scheduler`. Existing private
 state and schedules keep their original names; see
 [compatibility notes](name-change.md).
+
+## From npm
+
+Use Node.js 22.14 or newer; pnpm is not needed for npm installation:
+
+```sh
+npm install --global codex-reset-scheduler
+codex-reset-scheduler version
+codex-reset-scheduler --help
+```
+
+Use `codex-reset-scheduler` both for package-manager operations and to run the
+installed CLI.
+
+The release process uses a manual version PR and a version-tag push, then
+verifies, publishes and installs the exact npm version before creating a GitHub
+Release with generated notes. Registry ownership and trusted-publisher setup
+require the package owner; see the [release guide](releasing.md). The manually
+runnable Release validation workflow only validates and uploads a tarball.
 
 ## From source
 
@@ -39,13 +56,13 @@ pnpm check
 pnpm pack
 ```
 
-The resulting `codex-reset-scheduler-0.1.0.tgz` can be installed by a consumer
+The resulting `codex-reset-scheduler-0.1.1.tgz` can be installed by a consumer
 with Node.js 22.14+ and npm. The package has no production dependencies and
 installation does not require pnpm. This example uses a separate prefix rather
 than changing an existing global installation:
 
 ```sh
-npm install --global --prefix ./codex-reset-scheduler-local --ignore-scripts ./codex-reset-scheduler-0.1.0.tgz
+npm install --global --prefix ./codex-reset-scheduler-local --ignore-scripts ./codex-reset-scheduler-0.1.1.tgz
 ```
 
 On Linux/macOS, check the installed command:
@@ -73,24 +90,6 @@ authenticated Codex account. `doctor`, `resets`, `plan`, and `arm --dry-run` use
 read-only account access through the locally authenticated app-server. Arming a
 real plan needs explicit confirmation and can cause irreversible redemption
 later.
-
-## After a public release
-
-Only after registry publication, the intended commands are:
-
-```sh
-npm install --global codex-reset-scheduler
-codex-reset-scheduler doctor
-```
-
-Use `codex-reset-scheduler` both for package-manager operations and to run the
-installed CLI.
-
-The release process uses a manual version PR and a version-tag push, then
-verifies, publishes and installs the exact npm version before creating a GitHub
-Release with generated notes. Registry ownership and trusted-publisher setup
-require the package owner; see the [release guide](releasing.md). The manually
-runnable Release validation workflow only validates and uploads a tarball.
 
 ## Upgrading an existing installation
 
