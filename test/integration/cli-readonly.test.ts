@@ -196,20 +196,6 @@ test("worker rejects dry-run before state access or backend connection", async (
   assert.equal(connect.mock.callCount(), 0);
 });
 
-for (const flag of ["--version", "-v"]) {
-  test(`${flag} reports the package version without account access`, async () => {
-    const { dependencies, stdout } = harness();
-    const code = await runCli([flag], {
-      ...dependencies,
-      connect: () => {
-        throw new Error("Must not connect");
-      },
-    });
-    assert.equal(code, 0);
-    assert.equal(stdout.join(""), `codex-reset-scheduler ${VERSION}\n`);
-  });
-}
-
 for (const resetCredits of [
   null,
   { availableCount: 1, detailsComplete: false, credits: null },

@@ -216,7 +216,6 @@ codex-reset-scheduler disarm [--plan <id> | --all] [--yes] [--dry-run] [--json]
 codex-reset-scheduler logs [--plan <id-or-selector>] [--json]
 codex-reset-scheduler gc [--dry-run] [--json]
 codex-reset-scheduler version [--json]
-codex-reset-scheduler --version
 ```
 
 For a reviewed non-interactive run, use `--yes` after reviewing
