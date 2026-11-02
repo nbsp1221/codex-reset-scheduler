@@ -1,45 +1,19 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import {
-  access,
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  realpath,
-  rm,
-} from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-async function npmEntrypoint() {
-  if (process.platform === "win32")
-    return join(
-      dirname(process.execPath),
-      "node_modules",
-      "npm",
-      "bin",
-      "npm-cli.js",
-    );
-  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
-    try {
-      return await realpath(join(directory, "npm"));
-    } catch {
-      /* Try the next PATH entry. */
-    }
-  }
-  throw new Error("npm CLI was not found.");
-}
+import spawn from "cross-spawn";
 
 function run(executable, args, options) {
-  const result = spawnSync(executable, args, {
+  const result = spawn.sync(executable, args, {
     encoding: "utf8",
     timeout: 120000,
     windowsHide: true,
     ...options,
   });
-  assert.equal(result.error, undefined, "Package smoke subprocess must start.");
+  assert.ifError(result.error);
   assert.equal(result.status, 0, "Package smoke command failed: " + args[0]);
   return result.stdout;
 }
@@ -69,11 +43,9 @@ async function smokePackage(spec, expectedVersion) {
       npm_config_globalconfig: join(temporary, "global.npmrc"),
       npm_config_cache: join(temporary, "cache"),
     };
-    const npmCLI = await npmEntrypoint();
     run(
-      process.execPath,
+      "npm",
       [
-        npmCLI,
         "install",
         "--prefix",
         temporary,

@@ -25,7 +25,7 @@
     "format:check": "prettier --check .",
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:scripts && pnpm build && pnpm pack:dry",
+    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:scripts && pnpm pack:dry",
     "prepack": "pnpm build",
     "test:package": "node scripts/package-smoke.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\""
@@ -58,6 +58,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "22.20.1",
+    "cross-spawn": "7.0.6",
     "eslint": "10.12.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3",
