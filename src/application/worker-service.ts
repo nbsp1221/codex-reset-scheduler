@@ -67,7 +67,7 @@ export async function runWorker(
   dependencies = defaults(),
 ): Promise<WorkerResult> {
   return dependencies.store.withLock(async (locked) => {
-    let state = locked.get();
+    const state = locked.get();
     let plan = findPlan(state, planId);
     const now = dependencies.now();
     const nowSeconds = Math.floor(now.getTime() / 1_000);
@@ -80,7 +80,7 @@ export async function runWorker(
     }
     if (nowSeconds >= plan.expiresAt && plan.status !== "settling") {
       const expired = expirePlan(plan, now);
-      if (expired !== plan) plan = await savePlan(locked, state, plan, expired);
+      if (expired !== plan) plan = await savePlan(locked, plan, expired);
       return result(
         plan,
         plan.status === "expired"
@@ -89,7 +89,7 @@ export async function runWorker(
       );
     }
     if (plan.scheduler.platform !== dependencies.paths.platform) {
-      plan = await savePlan(locked, state, plan, {
+      plan = await savePlan(locked, plan, {
         ...plan,
         status: "paused",
         terminalReason: "scheduler_platform_mismatch",
@@ -98,7 +98,7 @@ export async function runWorker(
       return result(plan, "scheduler-platform-mismatch");
     }
     if ((await dependencies.runtimeHash()) !== plan.runtimeSha256) {
-      plan = await savePlan(locked, state, plan, {
+      plan = await savePlan(locked, plan, {
         ...plan,
         status: "paused",
         terminalReason: "runtime_hash_mismatch",
@@ -114,7 +114,7 @@ export async function runWorker(
         accountFingerprint(account, state.accountSalt) !==
         plan.accountFingerprint
       ) {
-        plan = await savePlan(locked, state, plan, {
+        plan = await savePlan(locked, plan, {
           ...plan,
           status: "paused",
           terminalReason: "account_changed",
@@ -127,7 +127,7 @@ export async function runWorker(
         const snapshot = await client.readRateLimits();
         const reconciled = reconcileAfterSnapshot(plan, snapshot, now);
         if (reconciled !== plan)
-          plan = await savePlan(locked, state, plan, reconciled);
+          plan = await savePlan(locked, plan, reconciled);
         return result(plan, "settling-reconciled");
       }
 
@@ -139,7 +139,7 @@ export async function runWorker(
         if (target === "incomplete")
           return result(plan, "details-incomplete-noop");
         if (target === null) {
-          plan = await savePlan(locked, state, plan, {
+          plan = await savePlan(locked, plan, {
             ...plan,
             status: "unavailable",
             terminalReason: "target_unavailable",
@@ -152,7 +152,7 @@ export async function runWorker(
           target.resetType !== "codexRateLimits" ||
           target.expiresAt !== plan.expiresAt
         ) {
-          plan = await savePlan(locked, state, plan, {
+          plan = await savePlan(locked, plan, {
             ...plan,
             status: "paused",
             terminalReason: "target_mismatch",
@@ -163,8 +163,7 @@ export async function runWorker(
         const attemptTime = dependencies.now();
         if (Math.floor(attemptTime.getTime() / 1_000) >= plan.expiresAt) {
           const expired = expirePlan(plan, attemptTime);
-          if (expired !== plan)
-            plan = await savePlan(locked, state, plan, expired);
+          if (expired !== plan) plan = await savePlan(locked, plan, expired);
           return result(
             plan,
             plan.status === "expired"
@@ -175,8 +174,7 @@ export async function runWorker(
         if (Math.floor(attemptTime.getTime() / 1_000) < plan.notBefore)
           return result(plan, "too-early-noop");
         const attempting = beginAttempt(plan, attemptTime);
-        plan = await savePlan(locked, state, plan, attempting);
-        state = locked.get();
+        plan = await savePlan(locked, plan, attempting);
       }
 
       const attempt = plan.attempt;
@@ -187,13 +185,7 @@ export async function runWorker(
       const retryTime = dependencies.now();
       if (Math.floor(retryTime.getTime() / 1_000) < plan.notBefore)
         return result(plan, "too-early-noop");
-      plan = await savePlan(
-        locked,
-        state,
-        plan,
-        recordAttemptSent(plan, retryTime),
-      );
-      state = locked.get();
+      plan = await savePlan(locked, plan, recordAttemptSent(plan, retryTime));
       const sendTime = dependencies.now();
       if (Math.floor(sendTime.getTime() / 1_000) < plan.notBefore)
         return result(plan, "too-early-noop");
@@ -221,13 +213,11 @@ export async function runWorker(
         applyConsumeOutcome(plan, outcome, completedAt),
         completedAt,
       );
-      plan = await savePlan(locked, state, plan, transitioned);
-      state = locked.get();
+      plan = await savePlan(locked, plan, transitioned);
       const after = await client.readRateLimits();
       if (plan.status !== "expired") {
         plan = await reconcileOutcome(
           locked,
-          state,
           plan,
           outcome,
           after,
@@ -244,7 +234,6 @@ export async function runWorker(
 
 async function reconcileOutcome(
   locked: LockedState,
-  state: InstallState,
   plan: ResetPlan,
   outcome: ConsumeOutcome,
   snapshot: RateLimitsSnapshot,
@@ -252,14 +241,12 @@ async function reconcileOutcome(
 ): Promise<ResetPlan> {
   if (outcome === "reset" || outcome === "alreadyRedeemed") {
     const reconciled = reconcileAfterSnapshot(plan, snapshot, now);
-    return reconciled === plan
-      ? plan
-      : savePlan(locked, state, plan, reconciled);
+    return reconciled === plan ? plan : savePlan(locked, plan, reconciled);
   }
   const target = exactTarget(snapshot, plan);
   if (outcome === "nothingToReset") {
     if (target === null) {
-      return savePlan(locked, state, plan, {
+      return savePlan(locked, plan, {
         ...plan,
         status: "unavailable",
         terminalReason: "target_unavailable_after_deferral",
@@ -269,7 +256,7 @@ async function reconcileOutcome(
     return plan;
   }
   if (target !== null && target !== "incomplete") {
-    return savePlan(locked, state, plan, {
+    return savePlan(locked, plan, {
       ...plan,
       status: "paused",
       terminalReason: "backend_no_credit_contradiction",
@@ -306,10 +293,10 @@ type ResetCreditLike = NonNullable<
 
 async function savePlan(
   locked: LockedState,
-  state: InstallState,
   previous: ResetPlan,
   next: ResetPlan,
 ): Promise<ResetPlan> {
+  const state = locked.get();
   const plans = state.plans.map((plan) =>
     plan.planId === previous.planId ? next : plan,
   );
