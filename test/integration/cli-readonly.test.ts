@@ -225,3 +225,34 @@ for (const resetCredits of [
     assert.equal(report.data.resetDetailsAvailable, false);
   });
 }
+
+for (const [options, expected] of [
+  [[], 600],
+  [["--before", "5m"], 300],
+] as const) {
+  test(`plan duration uses the parser default or explicit option: ${expected}`, async () => {
+    const { dependencies, stdout } = harness();
+    assert.equal(await runCli(["plan", "--json", ...options], dependencies), 0);
+    const output = JSON.parse(stdout.join("")) as {
+      data: { beforeSeconds: number };
+    };
+    assert.equal(output.data.beforeSeconds, expected);
+  });
+}
+
+test("invalid CLI options keep human parse errors even when JSON is requested", async () => {
+  for (const options of [["--unknown"], ["--before"], ["--all=value"]]) {
+    const { dependencies, stdout, stderr } = harness();
+    assert.equal(
+      await runCli(["plan", "--json", ...options], {
+        ...dependencies,
+        connect: () => {
+          throw new Error("Invalid options must not connect.");
+        },
+      }),
+      1,
+    );
+    assert.deepEqual(stdout, []);
+    assert.match(stderr.join(""), /^codex-reset-scheduler: /u);
+  }
+});
