@@ -231,15 +231,7 @@ function selectPlans(
   if (selector === undefined) {
     throw new SafetyError("Specify --plan or --all.", "missing_plan_selector");
   }
-  const matches = plans.filter(
-    (plan) => plan.planId === selector || plan.creditSelector === selector,
-  );
-  if (matches.length !== 1)
-    throw new SafetyError(
-      "Plan selector was not found or ambiguous.",
-      "invalid_plan",
-    );
-  return matches;
+  return selectOne(plans, selector);
 }
 
 function selectOne(

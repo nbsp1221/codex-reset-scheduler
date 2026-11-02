@@ -30,9 +30,13 @@ test("worker consumes only the exact target and succeeds after authoritative ret
   let reads = 0;
   const client = fakeClient({
     read: () => (reads++ === 0 ? snapshot(true) : snapshot(false)),
-    consume: (creditId, key) => {
+    consume: async (creditId, key) => {
+      const persisted = (await harness.store.load())?.plans[0];
+      assert.equal(persisted?.status, "attempting");
+      assert.equal(persisted.attempt?.idempotencyKey, key);
+      assert.equal(persisted.attempt.tryCount, 1);
       calls.push({ creditId, key });
-      return Promise.resolve("reset");
+      return "reset";
     },
   });
   try {

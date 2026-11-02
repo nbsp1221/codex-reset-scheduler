@@ -50,15 +50,20 @@ export class StateStore {
 
   async #loadPersisted(): Promise<InstallState | null> {
     await rejectSymlinkIfPresent(this.#paths.stateFile, "state file");
+    let contents: string;
     try {
-      return decodeInstallState(
-        JSON.parse(await readFile(this.#paths.stateFile, "utf8")) as unknown,
-      );
+      contents = await readFile(this.#paths.stateFile, "utf8");
     } catch (error) {
       if (isNotFound(error)) return null;
-      if (error instanceof ProtocolError) throw error;
+      throw error;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(contents) as unknown;
+    } catch {
       throw new ProtocolError("State file is not valid JSON.");
     }
+    return decodeInstallState(value);
   }
 
   async initialize(): Promise<InstallState> {

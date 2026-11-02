@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions are welcome after the initial release.
+Contributions are welcome.
 
 ## Safety rules
 
@@ -42,6 +42,5 @@ when to run installed-package regression checks on disposable hosted runners.
 
 Use an ordinary PR to update the version in `package.json`. Builds generate
 `src/version.ts` so immutable worker snapshots remain self-contained. Follow the
-[release guide](docs/releasing.md) for exact-tag validation, OIDC publishing and
-installed-package verification. Publishing is a separate explicit release
-decision.
+[release guide](docs/releasing.md) for tag-triggered OIDC publishing and GitHub
+Releases. Publishing is a separate explicit release decision.

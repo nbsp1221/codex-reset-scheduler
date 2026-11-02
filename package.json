@@ -16,20 +16,19 @@
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
-    "build": "pnpm clean && node scripts/release-version.mjs generate && tsc -p tsconfig.build.json && node scripts/prepare-bin.mjs",
-    "build:test": "pnpm clean && node scripts/release-version.mjs generate && tsc -p tsconfig.test.json",
-    "test": "pnpm build:test && node scripts/run-tests.mjs",
-    "coverage": "pnpm build:test && node scripts/run-tests.mjs --coverage",
-    "lint": "node scripts/release-version.mjs generate && eslint src test scripts/native-product-*.mjs scripts/release*.mjs scripts/package-smoke.mjs",
+    "build": "pnpm clean && node scripts/generate-version.mjs && tsc -p tsconfig.build.json && node scripts/prepare-bin.mjs",
+    "build:test": "pnpm clean && node scripts/generate-version.mjs && tsc -p tsconfig.test.json",
+    "test": "pnpm build:test && node --test \".test-dist/test/**/*.test.js\"",
+    "coverage": "pnpm build:test && node --experimental-test-coverage --test \".test-dist/test/**/*.test.js\"",
+    "lint": "node scripts/generate-version.mjs && eslint src test scripts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pack:dry": "pnpm pack --dry-run",
     "security:secrets": "node scripts/scan-secrets.mjs",
-    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:native-harness && pnpm test:release && pnpm build && pnpm pack:dry",
+    "check": "pnpm format:check && pnpm lint && pnpm security:secrets && pnpm test && pnpm test:scripts && pnpm pack:dry",
     "prepack": "pnpm build",
-    "test:native-harness": "node --test scripts/native-product-cleanup.test.mjs",
-    "test:release": "node --test scripts/release.test.mjs",
-    "test:package": "node scripts/package-smoke.mjs"
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\""
   },
   "engines": {
     "node": ">=22.14.0"
@@ -59,6 +58,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "22.20.1",
+    "cross-spawn": "7.0.6",
     "eslint": "10.12.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3",

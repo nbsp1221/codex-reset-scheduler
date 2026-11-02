@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { ResetPlan } from "../domain/types.js";
@@ -163,8 +163,4 @@ WantedBy=timers.target
 
 function formatSystemdCalendar(value: string): string {
   return value.replace("T", " ").replace(/\.\d{3}Z$/u, " UTC");
-}
-
-export async function readSystemdArtifact(path: string): Promise<string> {
-  return readFile(path, "utf8");
 }

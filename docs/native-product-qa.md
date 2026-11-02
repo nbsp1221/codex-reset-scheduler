@@ -1,9 +1,10 @@
 # Optional native product QA
 
-`Installed product native flow` is a permanent, optional manual regression
-workflow. Run it on a release candidate after changes to packaging, CLI arm or
-cancel, scheduling, worker execution, or persistence. It is not an automatic
-release gate. Existing ordinary CI continues to run safety regressions.
+`Native integration tests` (`native-integration.yml`) is a permanent, optional
+manual regression workflow. Run it on a release candidate after changes to
+packaging, CLI arm or cancel, scheduling, worker execution, or persistence. It
+is not an automatic release gate. Existing ordinary CI continues to run safety
+regressions.
 
 Run the workflow from GitHub Actions after it exists on the default branch. Only
 disposable GitHub-hosted runners are supported. Local and self-hosted/shared

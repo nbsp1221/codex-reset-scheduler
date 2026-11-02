@@ -1,5 +1,3 @@
-import { homedir } from "node:os";
-
 import { SafetyError } from "../domain/errors.js";
 import type { ManagedPaths } from "../persistence/paths.js";
 import { runCommand, type CommandRunner } from "../platform/command-runner.js";
@@ -32,8 +30,4 @@ function windowsUserId(): string {
   return domain === undefined || domain.length === 0
     ? username
     : `${domain}\\${username}`;
-}
-
-export function schedulerHome(): string {
-  return homedir();
 }

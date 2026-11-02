@@ -32,15 +32,14 @@ export default tseslint.config(
   },
   {
     ...tseslint.configs.disableTypeChecked,
-    files: [
-      "scripts/native-product-*.mjs",
-      "scripts/release*.mjs",
-      "scripts/package-smoke.mjs",
-    ],
+    files: ["scripts/**/*.mjs"],
     languageOptions: {
       parserOptions: { project: false, projectService: false },
       globals: {
         process: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
         console: "readonly",
         fetch: "readonly",
         AbortSignal: "readonly",

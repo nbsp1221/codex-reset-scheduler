@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { lstat, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -38,6 +46,33 @@ test("state store rejects a symlinked state file", async () => {
     await rm(paths.stateFile);
     await symlink("/dev/null", paths.stateFile);
     await assert.rejects(() => store.load(), /symbolic link/);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("state read errors are not mislabeled as corrupt JSON", async () => {
+  const home = await mkdtemp(join(tmpdir(), "resetrail-state-"));
+  try {
+    const paths = managedPaths({ platform: "linux", home, environment: {} });
+    await mkdir(paths.stateFile, { recursive: true });
+    await assert.rejects(new StateStore(paths).load(), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.notEqual(error.name, "ProtocolError");
+      return true;
+    });
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("invalid state JSON still produces a protocol error", async () => {
+  const home = await mkdtemp(join(tmpdir(), "resetrail-state-"));
+  try {
+    const paths = managedPaths({ platform: "linux", home, environment: {} });
+    await mkdir(paths.stateDirectory, { recursive: true });
+    await writeFile(paths.stateFile, "{");
+    await assert.rejects(new StateStore(paths).load(), /not valid JSON/);
   } finally {
     await rm(home, { recursive: true, force: true });
   }

@@ -61,46 +61,46 @@ const defaultDependencies: CliDependencies = {
   stderr: (text) => process.stderr.write(text),
 };
 
+function parseCliArguments(arguments_: readonly string[]) {
+  return parseArgs({
+    args: [...arguments_],
+    allowPositionals: true,
+    strict: true,
+    options: {
+      json: { type: "boolean", default: false },
+      help: { type: "boolean", short: "h", default: false },
+      timezone: { type: "string" },
+      credit: { type: "string" },
+      all: { type: "boolean", default: false },
+      before: { type: "string", default: "10m" },
+      "dry-run": { type: "boolean", default: false },
+      yes: { type: "boolean", default: false },
+      plan: { type: "string" },
+    },
+  });
+}
+
 export async function runCli(
   arguments_: readonly string[],
   dependencies: CliDependencies = defaultDependencies,
 ): Promise<number> {
-  let parsed: ReturnType<typeof parseArgs>;
+  let parsed: ReturnType<typeof parseCliArguments>;
   try {
-    parsed = parseArgs({
-      args: [...arguments_],
-      allowPositionals: true,
-      strict: true,
-      options: {
-        json: { type: "boolean", default: false },
-        help: { type: "boolean", short: "h", default: false },
-        timezone: { type: "string" },
-        credit: { type: "string" },
-        all: { type: "boolean", default: false },
-        before: { type: "string", default: "10m" },
-        "dry-run": { type: "boolean", default: false },
-        yes: { type: "boolean", default: false },
-        plan: { type: "string" },
-      },
-    });
+    parsed = parseCliArguments(arguments_);
   } catch (error) {
     return reportError(error, false, dependencies);
   }
 
   const command = parsed.positionals[0];
-  const json = parsed.values.json === true;
-  const timezone = stringOption(parsed.values.timezone);
-  const selector = stringOption(parsed.values.credit);
-  const all = parsed.values.all === true;
-  const before = stringOption(parsed.values.before) ?? "10m";
-  const dryRun = parsed.values["dry-run"] === true;
-  const yes = parsed.values.yes === true;
-  const planSelector = stringOption(parsed.values.plan);
-  if (
-    parsed.values.help === true ||
-    command === undefined ||
-    command === "help"
-  ) {
+  const json = parsed.values.json;
+  const timezone = parsed.values.timezone;
+  const selector = parsed.values.credit;
+  const all = parsed.values.all;
+  const before = parsed.values.before;
+  const dryRun = parsed.values["dry-run"];
+  const yes = parsed.values.yes;
+  const planSelector = parsed.values.plan;
+  if (parsed.values.help || command === undefined || command === "help") {
     dependencies.stdout(helpText());
     return 0;
   }
@@ -250,10 +250,6 @@ async function confirmText(expected: string, prompt: string): Promise<void> {
   }
 }
 
-function stringOption(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
 async function doctor(
   json: boolean,
   dependencies: CliDependencies,
@@ -276,7 +272,7 @@ async function doctor(
       accountType: account.type,
       accountPlan: account.planType,
       accountIdentityAvailable: account.email !== null,
-      resetDetailsAvailable: limits.resetCredits?.credits !== null,
+      resetDetailsAvailable: limits.resetCredits?.credits != null,
       resetDetailsComplete: limits.resetCredits?.detailsComplete ?? false,
       availableResetCount: limits.resetCredits?.availableCount ?? 0,
       scheduler,
@@ -302,7 +298,7 @@ async function resets(
     const data = {
       timezone: zone,
       availableCount: summary?.availableCount ?? 0,
-      detailsAvailable: summary?.credits !== null && summary !== null,
+      detailsAvailable: summary?.credits != null,
       detailsComplete: summary?.detailsComplete ?? false,
       resets: credits.map((credit) => ({
         selector: creditSelector(credit.id),

@@ -1,52 +1,24 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import {
-  access,
-  cp,
-  mkdir,
-  mkdtemp,
-  readFile,
-  realpath,
-  rm,
-} from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 
-import { readVersion } from "./release-version.mjs";
-
-async function npmEntrypoint() {
-  if (process.platform === "win32")
-    return join(
-      dirname(process.execPath),
-      "node_modules",
-      "npm",
-      "bin",
-      "npm-cli.js",
-    );
-  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
-    try {
-      return await realpath(join(directory, "npm"));
-    } catch {
-      /* Try the next PATH entry. */
-    }
-  }
-  throw new Error("npm CLI was not found.");
-}
+import spawn from "cross-spawn";
 
 function run(executable, args, options) {
-  const result = spawnSync(executable, args, {
+  const result = spawn.sync(executable, args, {
     encoding: "utf8",
     timeout: 120000,
     windowsHide: true,
     ...options,
   });
-  assert.equal(result.error, undefined, "Package smoke subprocess must start.");
+  assert.ifError(result.error);
   assert.equal(result.status, 0, "Package smoke command failed: " + args[0]);
   return result.stdout;
 }
 
-export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
+async function smokePackage(spec, expectedVersion) {
   const temporary = await mkdtemp(join(tmpdir(), "scheduler-package-"));
   try {
     const home = join(temporary, "home");
@@ -71,19 +43,16 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
       npm_config_globalconfig: join(temporary, "global.npmrc"),
       npm_config_cache: join(temporary, "cache"),
     };
-    const registry = expectedIntegrity !== undefined;
-    const npmCLI = await npmEntrypoint();
     run(
-      process.execPath,
+      "npm",
       [
-        npmCLI,
         "install",
         "--prefix",
         temporary,
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
-        registry ? "--prefer-online" : "--offline",
+        "--offline",
         "--registry=https://registry.npmjs.org",
         spec,
       ],
@@ -109,15 +78,6 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
         "codex-reset-scheduler" + (process.platform === "win32" ? ".cmd" : ""),
       ),
     );
-    if (registry) {
-      const lock = JSON.parse(
-        await readFile(join(temporary, "package-lock.json"), "utf8"),
-      );
-      assert.equal(
-        lock.packages["node_modules/codex-reset-scheduler"].integrity,
-        expectedIntegrity,
-      );
-    }
     const standalone = join(temporary, "standalone");
     const runtime = join(standalone, "runtime");
     await mkdir(standalone);
@@ -160,7 +120,9 @@ export async function smokePackage(spec, expectedVersion, expectedIntegrity) {
 }
 
 async function main() {
-  const { version } = await readVersion();
+  const { version } = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
   if (process.argv[2]) {
     await smokePackage(resolve(process.argv[2]), version);
     return;
@@ -187,9 +149,4 @@ async function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  (await realpath(process.argv[1])) ===
-    (await realpath(fileURLToPath(import.meta.url)))
-)
-  await main();
+await main();

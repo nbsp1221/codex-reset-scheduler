@@ -1,119 +1,70 @@
 # Releasing
 
-Release decisions are manual. Version changes use an ordinary PR; pushing a
-verified version tag starts the only npm publishing workflow. GitHub Release
-notes are generated after npm publication and registry-install verification.
+This is a single npm package. Its version lives in `package.json`. Builds embed
+that version in the standalone scheduled runtime; there is no second version to
+maintain.
 
-## One-time owner setup
+## Workflows
 
-Version 0.1.0 was published manually from commit
-`461ecb4608581ea69c760a2684002251e0a69629`, without CI provenance. A later tag
-or GitHub Release does not add provenance to those existing npm bytes. Do not
-push `v0.1.0` to test this workflow: its already-published-version guard stops
-before OIDC publishing and GitHub Release creation.
+- `ci.yml`: lint, tests, build and installed-package smoke checks on Linux,
+  macOS and Windows, for the minimum supported Node version and Node 24.
+- `publish.yml`: a `v*` tag triggers checks, build and npm publication using
+  OIDC. A separate dependent job creates a GitHub Release with generated notes.
+- `native-integration.yml`: optional, manually triggered tests of real native
+  schedulers with a synthetic Codex backend on disposable hosted runners.
 
-The next approved version must validate the complete automated path: OIDC
-publication, registry installation, provenance, and GitHub Release creation.
-Local package tests and validation-only CI do not establish OIDC publication. Do
-not add a token fallback to this workflow.
+## One-time setup
 
-In the npm package's **Settings → Trusted publishing**, configure GitHub
-Actions:
+In npm's package settings, configure a GitHub Actions trusted publisher:
 
-- Organization/user: `nbsp1221`
+- Owner: `nbsp1221`
 - Repository: `codex-reset-scheduler`
-- Workflow filename: `publish.yml` (no directory prefix)
-- Environment: leave blank; this workflow does not use a GitHub environment
-- Allowed actions: enable direct `npm publish`
+- Workflow: `publish.yml`
+- Environment: blank
+- Allow direct `npm publish`; no separate dist-tag management permission needed.
 
-Create this configuration close to the intended release: npm expires an unused
-configuration after two days if it has not completed its first successful
-publish. Once validated, that connection is exempt from this initial expiry.
-Recreate an expired connection near the next approved release rather than
-publishing an otherwise unnecessary version. No npm secret is needed in GitHub.
-The publish job uses GitHub-hosted Ubuntu, Node 24, pinned npm 11.6.2, and
-job-scoped `id-token: write`. Build workflows read the pnpm version from
-`package.json`'s `packageManager` field. See
-[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+npm includes staged publishing in new configurations by default. This workflow
+uses direct publishing. No npm token is stored in GitHub. See
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) for the
+current configuration expiry and authentication requirements.
 
-## Each version
+## Publish a version
 
-1. Open a version/release PR updating the version in `package.json`, with
-   release notes in the PR. Build, test and lint commands generate the ignored
-   `src/version.ts` from this single source. Compiled worker snapshots stay
-   self-contained without reading a package manifest at runtime. Use a canonical
-   `MAJOR.MINOR.PATCH` or `MAJOR.MINOR.PATCH-prerelease` version without build
-   metadata.
-2. Run `pnpm check` and `pnpm test:package`. Merge only after CI passes. Wait
-   for the merged main commit's six OS/Node checks to succeed.
-3. After publication approval, create `v<version>` on that exact verified main
-   commit and push the tag. For example:
+1. Update `package.json` in a PR and describe the release. Run `pnpm check` and
+   `pnpm test:package`.
+2. Merge after CI passes and wait for main CI to pass. Publishing requires a
+   separate explicit approval.
+3. Tag that exact approved main commit and push the tag:
 
    ```sh
-   git tag v0.1.1 <verified-main-commit>
-   git push origin v0.1.1
+   git tag v0.1.2 <approved-main-commit>
+   git push origin v0.1.2
    ```
 
-   For `0.2.0-rc.1`, use tag `v0.2.0-rc.1`. Stable versions publish to npm's
-   `latest` tag; prereleases publish to `next` and create a prerelease on
-   GitHub. The pushed tag must match the manifest exactly and must not be
-   deleted. Do not move or reuse a release tag. Publishing a GitHub Release does
-   not trigger npm.
+4. Watch **Publish release**. Stable versions use npm's `latest` tag; versions
+   containing a prerelease suffix use `next` and a GitHub prerelease.
 
-4. Check **Publish release** through completion. It validates the tag/SHA,
-   version coherence and successful main CI, runs checks, packs once, and tests
-   that installed tarball in an empty consumer. The publish job downloads and
-   hashes that same artifact before its single OIDC publish attempt. It then
-   checks exact registry-version integrity and installs
-   `codex-reset-scheduler@<version>` with a fresh cache, checking the installed
-   CLI's version, help and empty status. Only after those checks succeed does
-   the final job create a public GitHub Release for the existing tag with
-   generated notes. Only this job has `contents: write`; only the npm publisher
-   has `id-token: write`.
+Do not move or reuse a published tag. Publishing a GitHub Release does not
+trigger npm.
 
-Package smoke checks use isolated HOME/config/state directories and no Codex
-account, native registration or reset consumption. Package access stays public
-and provenance enabled. The manually runnable **Release validation** workflow
-only checks and uploads a tarball; it cannot publish.
+## Publication and availability are different
 
-## Interrupted or failed publication
+A successful `npm publish` may report that the package is still processing.
+Immediate registry visibility is not a condition of the publishing job. Do not
+turn propagation delay into a second publishing attempt. Pre-publication package
+checks run in CI; a later public-install check can confirm availability without
+repeating the write.
 
-Do not blindly rerun a failed publish. npm may have accepted the request before
-the client failed. Inspect the exact version and the retained Actions tarball. A
-rerun may proceed only when GitHub confirms that the `publish` job was completed
-with conclusion `skipped` in every earlier attempt of that run. This allows
-recovery from verification failures before publishing. Missing job history,
-lookup errors, and any prior publish job that ran or was cancelled stop the
-rerun. The job uses `actions: read` only to inspect this history. A new run also
-refuses an already visible version; registry errors are not treated as absence.
-Registry visibility checks retry reads only. An uncertain publication requires
-investigation, not another tag push or a GitHub Release event.
+If a publication step fails or is interrupted, inspect the original log and
+exact registry version before deciding what to do. Never blindly rerun
+publishing or change the version just to get a green workflow. npm versions are
+immutable.
 
-To repeat only the registry installation check after inspecting the result,
-download that run's `codex-reset-scheduler-package-<attempt>` artifact and, from
-the exact release checkout with Node and npm available, run:
+If npm publishing succeeded and only **github-release** failed, rerun that job
+using GitHub's standard job rerun controls. First check whether the Release was
+already created despite a lost response. Do not rerun the successful publisher.
+See
+[GitHub rerun documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 
-```sh
-node scripts/release-registry.mjs after /path/to/package.tgz
-```
-
-This command does not publish. It requires the registry bytes to match the
-artifact before installing the exact version. If publication is confirmed,
-finish verification rather than publish again. If the outcome remains unknown,
-stop and investigate. Never overwrite a published version or repair it by moving
-the Git tag; a corrected package needs a new version PR.
-
-## GitHub Release creation failure
-
-If npm publication and registry installation succeeded and only the
-`github-release` job failed, rerun the failed job only:
-
-```sh
-gh run rerun <run-id> --failed
-```
-
-The successful verify/publish jobs are not rerun. The Release job rechecks the
-existing tag and accepts an already published Release only when its tag and
-prerelease metadata match. This also handles a creation request that succeeded
-before its client failed. Lookup errors and mismatched visible metadata fail
-without another creation attempt. Inspect existing drafts before retrying.
+Changing a workflow now does not repair an old run: reruns use its original SHA
+and ref.

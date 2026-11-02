@@ -1,4 +1,4 @@
-name: Installed product native flow
+name: Native integration tests
 
 on:
   workflow_dispatch:
